@@ -125,9 +125,7 @@ static void se_text_viewer_repaint( se_text_viewer* viewer )
     g_assert( cur_buf );
 
     //FIXME: this is slow algo just as a demo, change it later
-    //int size = SE_MAX_COLUMNS * SE_MAX_ROWS;
-
-    se_line* lp = cur_buf->getCurrentLine( cur_buf );
+    se_line* lp = cur_buf->lines;
     int nr_lines = cur_buf->getLineCount( cur_buf );
     
     for (int r = 0; r < MIN(viewer->rows, nr_lines); ++r) {
@@ -135,9 +133,6 @@ static void se_text_viewer_repaint( se_text_viewer* viewer )
                 se_line_getLineLength(lp) );
         lp = lp->next;
     }
-    
-    /* XExposeEvent ev; */
-    /* XSendEvent( viewer->env->display, viewer->view, False, ExposureMask, &ev ); */
 }
 
 static void se_text_viewer_redisplay(se_text_viewer* viewer )
@@ -164,25 +159,21 @@ static void se_text_viewer_redisplay(se_text_viewer* viewer )
     for (int r = 0; r < MIN(viewer->rows, nr_lines); ++r) {
         char *data = viewer->content + r*SE_MAX_ROWS;
         int data_len = strlen( data );
-        /* se_draw_text_utf8( viewer, &clr, data, MIN(data_len, viewer->columns) ); */
-        /* se_text_viewer_move_cursor( viewer, 0, viewer->cursor.row + 1 ); */
-
-        for (int i = 0; i < data_len; ++i) {
-            se_draw_char_utf8( viewer, &clr, data[i] );
-            se_text_viewer_forward_cursor( viewer, 1 );
-        }
-        se_text_viewer_move_cursor( viewer, 0, viewer->cursor.row + 1 );
-        
-        char tmp[MIN(data_len, viewer->columns)];
-        snprintf( tmp, sizeof(tmp), "%s", data);
-        se_debug( "draw: %s", tmp );
-    }
-    
-    for (int r = 0; r < MIN(viewer->rows, nr_lines); ++r) {
-        char *data = viewer->content + r*SE_MAX_ROWS;
-        int data_len = strlen( data );
         se_draw_text_utf8( viewer, &clr, data, MIN(data_len, viewer->columns) );
         se_text_viewer_move_cursor( viewer, 0, viewer->cursor.row + 1 );
+
+        // when use 'Monaco', se_draw_char_utf8 or se_draw_text_utf8 will
+        // produce exactly the same effect on display.
+        
+        /* for (int i = 0; i < data_len; ++i) { */
+        /*     se_draw_char_utf8( viewer, &clr, data[i] ); */
+        /*     se_text_viewer_forward_cursor( viewer, 1 ); */
+        /* } */
+        /* se_text_viewer_move_cursor( viewer, 0, viewer->cursor.row + 1 ); */
+        
+        /* char tmp[MIN(data_len, viewer->columns)]; */
+        /* snprintf( tmp, sizeof(tmp), "%s", data); */
+        /* se_debug( "draw: %s", tmp ); */
     }
 
     XftColorFree( env->display, env->visual, env->colormap, &clr );
