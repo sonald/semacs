@@ -6,16 +6,12 @@ HFILES=util.h \
 	editor.h \
 	xview.h
 
-# OFILES= obj/editor.o \
-# 	obj/xview.o \
-# 	obj/main.o
-
-OFILES=xview.o \
-	util.o \
-	env.o \
-	editor.o \
-	buffer.o \
-	main.o
+OFILES= obj/xview.o \
+	obj/util.o \
+	obj/env.o \
+	obj/editor.o \
+	obj/buffer.o \
+	obj/main.o
 
 
 all: semacs
@@ -25,7 +21,8 @@ semacs: $(OFILES)
 
 
 obj/%.o: %.c $(HFILES)
-	$(CC) -o $@ $(CFLAGS) $*.c
+	@mkdir -p $$(dirname $@)
+	$(CC) -c -o $@ $(CFLAGS) $*.c
 
 
 clean:
