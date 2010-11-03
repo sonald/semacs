@@ -2,8 +2,11 @@ CC=gcc
 LDFLAGS=`pkg-config x11 glib-2.0 xft --libs`
 CFLAGS=`pkg-config x11 glib-2.0 xft --cflags` -g -Wall -std=gnu99
 
-HFILES=util.h \
+HFILES= util.h \
 	editor.h \
+	env.h \
+	modemap.h \
+	buffer.h \
 	xview.h
 
 OFILES= obj/xview.o \
@@ -11,6 +14,7 @@ OFILES= obj/xview.o \
 	obj/env.o \
 	obj/editor.o \
 	obj/buffer.o \
+	obj/modemap.o \
 	obj/main.o
 
 

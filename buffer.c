@@ -18,6 +18,7 @@
  */
 
 #include "buffer.h"
+#include "editor.h"
 
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE // for lstat
@@ -121,14 +122,6 @@ struct se_mark
     char markName[32];
     int position;
     int flags;  // persistent or not
-};
-
-struct se_mode
-{
-    se_mode *next;
-    
-    char modeName[64];
-    int (*init)(se_mode*); // setup mode such as keybindings
 };
 
 int se_buffer_init(se_buffer* bufp)
@@ -405,6 +398,15 @@ int se_buffer_invokeMode(se_buffer* bufp, const char* mode)
     return 0;
 }
 
+int se_buffer_setMajorMode(se_buffer* bufp, const char* mode)
+{
+    g_assert( bufp && mode );
+    bufp->majorMode = bufp->world->getMajorMode(bufp->world, mode);
+    g_assert( bufp->majorMode );
+    se_debug( "set major mode: %s", mode );
+    return TRUE;
+}
+
 void se_buffer_insertChar(se_buffer* bufp, int c)
 {
 
@@ -493,12 +495,10 @@ int se_buffer_copyRegion(se_buffer* bufp, se_buffer* other, const char* markName
     return 0;
 }
 
-
-
-
-se_buffer* se_buffer_create(const char* buf_name)
+se_buffer* se_buffer_create(se_world* world, const char* buf_name)
 {
     se_buffer *bufp = g_malloc0( sizeof(se_buffer) );
+    bufp->world = world;
     
     bufp->init = se_buffer_init;
     bufp->release = se_buffer_release;
@@ -535,7 +535,8 @@ se_buffer* se_buffer_create(const char* buf_name)
     bufp->appendMode = se_buffer_appendMode;
     bufp->deleteMode = se_buffer_deleteMode;
     bufp->invokeMode = se_buffer_invokeMode;
-
+    bufp->setMajorMode = se_buffer_setMajorMode;
+    
     bufp->insertChar = se_buffer_insertChar;
     bufp->insertString = se_buffer_insertString;
     bufp->replaceChar = se_buffer_replaceChar;
@@ -543,7 +544,7 @@ se_buffer* se_buffer_create(const char* buf_name)
     bufp->deleteChars = se_buffer_deleteChars;
     bufp->deleteRegion = se_buffer_deleteRegion;
     bufp->copyRegion = se_buffer_copyRegion;
-
+    
     size_t siz = strlen(buf_name);
     se_debug( "MIN: %d", MIN(siz, SE_MAX_BUF_NAME_SIZE) );
     strncpy( bufp->bufferName, buf_name, MIN(siz, SE_MAX_BUF_NAME_SIZE) );

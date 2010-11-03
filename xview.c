@@ -23,56 +23,53 @@ SE_VIEW_HANDLER( se_text_viewer_key_event );
 SE_VIEW_HANDLER( se_text_viewer_mouse_event );
 SE_VIEW_HANDLER( se_text_viewer_configure_change_handler );
 
-static void se_text_viewer_draw_create( se_text_viewer* viewer );
-static void se_text_viewer_move_cursor( se_text_viewer* viewer, int col, int row );
-static void se_text_viewer_forward_cursor( se_text_viewer* viewer, int nchars );
-
-static void se_draw_char_utf8( se_text_viewer* viewer, XftColor* color, int c );
+/* static void se_text_viewer_draw_create( se_text_viewer* viewer ); */
+/* static void se_text_viewer_move_cursor( se_text_viewer* viewer, int col, int row ); */
 static void se_draw_text_utf8( se_text_viewer*, XftColor*, const char*, int );
 
 // if nchars > 0, move forward, else move backward
-void se_text_viewer_forward_cursor( se_text_viewer* viewer, int nchars )
-{
-    if ( !nchars ) return;
+/* static void se_text_viewer_forward_cursor( se_text_viewer* viewer, int nchars ) */
+/* { */
+/*     if ( !nchars ) return; */
     
-    assert( viewer );
-    /* se_debug( "origin: (%d, %d)", viewer->cursor.column, viewer->cursor.row ); */
+/*     assert( viewer ); */
+/*     /\* se_debug( "origin: (%d, %d)", viewer->cursor.column, viewer->cursor.row ); *\/ */
 
-    if ( nchars > 0 ) {
-        while ( nchars > 0 ) {
-            if ( viewer->cursor.column + 1 == viewer->columns ) {
-                viewer->cursor.column = 0;
-                ++viewer->cursor.row;
-                --nchars;
-                continue;
-            }
+/*     if ( nchars > 0 ) { */
+/*         while ( nchars > 0 ) { */
+/*             if ( viewer->cursor.column + 1 == viewer->columns ) { */
+/*                 viewer->cursor.column = 0; */
+/*                 ++viewer->cursor.row; */
+/*                 --nchars; */
+/*                 continue; */
+/*             } */
 
-            ++viewer->cursor.column;
-            --nchars;
-        }
+/*             ++viewer->cursor.column; */
+/*             --nchars; */
+/*         } */
 
-    } else {
-        while ( nchars < 0 ) {
-            if ( viewer->cursor.column == 0 ) {
-                if ( viewer->cursor.row == 0 )
-                    break;
+/*     } else { */
+/*         while ( nchars < 0 ) { */
+/*             if ( viewer->cursor.column == 0 ) { */
+/*                 if ( viewer->cursor.row == 0 ) */
+/*                     break; */
 
-                viewer->cursor.column = viewer->columns-1;
-                --viewer->cursor.row;
-                ++nchars;
-                continue;
-            }
+/*                 viewer->cursor.column = viewer->columns-1; */
+/*                 --viewer->cursor.row; */
+/*                 ++nchars; */
+/*                 continue; */
+/*             } */
 
-            --viewer->cursor.column;
-            ++nchars;
-        }
-    }
+/*             --viewer->cursor.column; */
+/*             ++nchars; */
+/*         } */
+/*     } */
     
-    viewer->physicalCursor.x = viewer->cursor.column * viewer->env->glyphMaxWidth;
-    viewer->physicalCursor.y = viewer->cursor.row * viewer->env->glyphMaxHeight;
+/*     viewer->physicalCursor.x = viewer->cursor.column * viewer->env->glyphMaxWidth; */
+/*     viewer->physicalCursor.y = viewer->cursor.row * viewer->env->glyphMaxHeight; */
     
-    /* se_debug( "after: (%d, %d)", viewer->cursor.column, viewer->cursor.row ); */
-}
+/*     /\* se_debug( "after: (%d, %d)", viewer->cursor.column, viewer->cursor.row ); *\/ */
+/* } */
 
 void se_text_viewer_move_cursor( se_text_viewer* viewer, int col, int row )
 {
@@ -206,90 +203,104 @@ void se_text_viewer_configure_change_handler(se_text_viewer* viewer, XEvent* ev 
     }
 }
 
+static se_key se_key_event_process( Display *display, XKeyEvent kev )
+{
+    int index = 0;
+    int mask = 0;
+    
+    if ( kev.state & ShiftMask ) {
+        mask = 0x01;
+    }
+    if ( kev.state & LockMask ) {
+        mask |= 0x02;
+    }
+    if ( mask ) index = 1;
+    
+    KeySym key_sym = XKeycodeToKeysym( display, kev.keycode, index );
+    if ( key_sym == NoSymbol ) {
+        se_debug( "NoSymbol for keycode %d", kev.keycode );
+    }
+    
+    se_key sekey = se_key_null_init();
+    /* if ( key_sym == XK_Control_L */
+    /*      || key_sym == XK_Control_R */
+    /*      || key_sym == XK_Meta_L */
+    /*      || key_sym == XK_Meta_R */
+    /*      || key_sym == XK_Super_L */
+    /*      || key_sym == XK_Super_R */
+    /*      || key_sym == XK_Super_L */
+    /*      || key_sym == XK_Super_R ) */
+    /*     return sekey; */
+    
+    char *key_str = XKeysymToString( key_sym );
+    if ( key_sym == XK_Escape ) {
+        sekey.modifiers |= EscapeDown;
+    }
+    
+    if ( strlen(key_str) > 1 ) {
+        se_debug( "sekey: %s", se_key_to_string(sekey) );        
+        return sekey;
+    }
+    
+    sekey.ascii = key_str[0];
+    
+    if ( kev.state & ControlMask ) {
+        sekey.modifiers |= ControlDown;
+    }
+    if ( kev.state & ShiftMask ) {
+        sekey.modifiers |= ShiftDown;
+    }
+    if ( kev.state & Mod1Mask ) {
+        sekey.modifiers |= MetaDown;
+    }
+
+    /* if ( key_sym == XK_Super_L || key_sym == XK_Super_R ) { */
+    /*     sekey.modifiers |= SuperDown; */
+    /* } */
+    if ( kev.state & Mod4Mask ) {
+        // this is no good, Mod4 can be map to other keysym
+        sekey.modifiers |= SuperDown;
+    }
+    se_debug( "sekey: %s", se_key_to_string(sekey) );
+    return sekey;
+}
+
+static se_key se_delayed_wait_key(se_text_viewer* viewer)
+{
+    se_debug( "waiting for a key..." );    
+    XEvent ev;
+    while ( XCheckWindowEvent( viewer->env->display, viewer->view,
+                               KeyPressMask | KeyReleaseMask, &ev ) == False ) {
+        usleep( 100 );
+    }
+
+    g_assert( ev.type == KeyRelease || ev.type == KeyPress );
+    se_debug( "wait for a key done" );
+    return se_key_event_process( viewer->env->display, ev.xkey );
+}
+
 void se_text_viewer_key_event(se_text_viewer* viewer, XEvent* ev )
 {
     assert( viewer && ev );
 
     XKeyEvent kev = ev->xkey;
-    KeySym key_sym = XKeycodeToKeysym( viewer->env->display, kev.keycode, 0 );
-    
     if ( kev.type == KeyPress ) {
-        se_debug( "enter key press event, keysym(0x%x): %s",
-                  (guint)key_sym, XKeysymToString(key_sym) );
-
-        switch( key_sym ) {
-        case XK_A...XK_Z:
-            se_debug( "upper case" );
-            
-        case XK_a...XK_z:
-        {
-            XRenderColor renderClr = {
-                .red = 0x0,
-                .green = 0x0,
-                .blue = 0x0,
-                .alpha = 0xeeee
-            };
-        
-            XftColor clr;
-            XftColorAllocValue( viewer->env->display, viewer->env->visual, 
-                                viewer->env->colormap, &renderClr, &clr );
-
-            char *str = XKeysymToString(key_sym);
-            int c = str[0];
-            if ( kev.state & ShiftMask )
-                c = toupper( c );
-            
-            se_draw_char_utf8( viewer, &clr, c );
-            XftColorFree( viewer->env->display, viewer->env->visual,
-                          viewer->env->colormap, &clr);
-            
-            break;
-        }
-
-        case XK_space:
-        {
-            // do testing round: randomly draw chars or strings this test give
-            // an idea that each single char's boundary can be calculated
-            // independently from XftTextExtents*, it's just as the same effect
-            // as we do for a long string
-            XRenderColor renderClr = {
-                .red = 0x0,
-                .green = 0x0,
-                .blue = 0x0,
-                .alpha = 0xeeee
-            };
-        
-            XftColor clr;
-            XftColorAllocValue( viewer->env->display, viewer->env->visual, 
-                                viewer->env->colormap, &renderClr, &clr );
-
-            char buf[] = "HWjJlLkQqTpP";
-            int len = strlen(buf);
-            
-            se_text_viewer_move_cursor( viewer, 0, 0 );
-            for (int i = 0; i < len; ++i) {
-                se_draw_char_utf8( viewer, &clr, buf[i] );                
-            }
-
-            se_text_viewer_move_cursor( viewer, 0, 1 );
-            se_draw_text_utf8( viewer, &clr, buf, len );
-            
-            XftColorFree( viewer->env->display, viewer->env->visual,
-                          viewer->env->colormap, &clr);
-            break;
-        }
-        
-        default:
-            break;
-        }
-
-    } else {
-        switch( key_sym ) {
-        case XK_Escape:
+        se_key sekey = se_key_event_process( viewer->env->display, kev );
+        if ( se_key_is_null(sekey) )
+            return;
+    
+        if ( se_key_is_only( sekey, EscapeDown )  )
             se_env_quit( viewer->env );
-            break;
+    
+        se_world *world = viewer->env->world;
+        se_command_args args;
+        bzero( &args, sizeof args );
+        while ( world->dispatchCommand( world, &args, sekey ) != TRUE ) {
+            sekey = se_delayed_wait_key( viewer );
+            if ( se_key_is_only( sekey, EscapeDown ) )
+                se_env_quit( viewer->env );
         }
-    }
+    }    
 }
 
 void se_text_viewer_mouse_event(se_text_viewer* viewer, XEvent* ev )
@@ -311,20 +322,19 @@ void se_text_viewer_draw_create( se_text_viewer* viewer )
         viewer->env->colormap );
 }
 
-void se_draw_char_utf8( se_text_viewer* viewer, XftColor* color, int c )
-{
-    assert( viewer && viewer->xftDraw );
+/* void se_draw_char_utf8( se_text_viewer* viewer, XftColor* color, int c ) */
+/* { */
+/*     assert( viewer && viewer->xftDraw ); */
 
-    const se_env* env = viewer->env;
-    se_position cur_pos = viewer->physicalCursor;
-    se_position start_pos = {
-        .x = cur_pos.x,
-        .y = cur_pos.y + env->glyphAscent,
-    };
-    XftDrawStringUtf8( viewer->xftDraw, color, viewer->env->xftFont,
-                       start_pos.x, start_pos.y, (const XftChar8*)&c, 1 );
-//    se_text_viewer_forward_cursor( viewer, 1 );
-}
+/*     const se_env* env = viewer->env; */
+/*     se_position cur_pos = viewer->physicalCursor; */
+/*     se_position start_pos = { */
+/*         .x = cur_pos.x, */
+/*         .y = cur_pos.y + env->glyphAscent, */
+/*     }; */
+/*     XftDrawStringUtf8( viewer->xftDraw, color, viewer->env->xftFont, */
+/*                        start_pos.x, start_pos.y, (const XftChar8*)&c, 1 ); */
+/* } */
 
 void se_draw_text_utf8( se_text_viewer* viewer, XftColor* color,
                         const char* utf8, int utf8_len )

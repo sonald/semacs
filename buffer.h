@@ -22,6 +22,7 @@
 #define _semacs_buffer_h
 
 #include "util.h"
+#include "modemap.h"
 
 DEF_CLS(se_mark);
 
@@ -40,10 +41,10 @@ struct se_line
 extern const char* se_line_getData( se_line* );
 extern int se_line_getLineLength( se_line* );
 
-DEF_CLS(se_mode);
-
 #define SE_MAX_NAME_SIZE  1023
 #define SE_MAX_BUF_NAME_SIZE  ((SE_MAX_NAME_SIZE/4)-1)
+
+struct se_world;
 
 DEF_CLS(se_buffer);
 struct se_buffer
@@ -63,7 +64,10 @@ struct se_buffer
     se_line *lines;
     se_mark *marks;
     se_mode *modes;
+    se_mode *majorMode;
 
+    struct se_world *world;
+    
     int (*init)(se_buffer*);
     int (*release)(se_buffer*);
     
@@ -115,7 +119,8 @@ struct se_buffer
     int (*deleteMode)(se_buffer*, const char* mode);
     // call mode->init()
     int (*invokeMode)(se_buffer*, const char* mode);
-
+    int (*setMajorMode)(se_buffer*, const char* mode);
+    
     void (*insertChar)(se_buffer*, int c);
     void (*replaceChar)(se_buffer*, int c);
     void (*insertString)(se_buffer*, char*);
@@ -126,7 +131,7 @@ struct se_buffer
     int (*copyRegion)(se_buffer*, se_buffer* other, const char* markName);
 };
 
-extern se_buffer* se_buffer_create(const char* buf_name);
+extern se_buffer* se_buffer_create(struct se_world*, const char* buf_name);
 
 #endif
 

@@ -63,8 +63,6 @@ int main_loop(int argc, char *argv[])
             viewer->key_handler( viewer, &ev );
             break;
 
-        /* case ConfigureRequest: */
-        /* case ResizeRequest: */
         case ConfigureNotify:
         case MapNotify:
             se_debug( "confiugration changed" );

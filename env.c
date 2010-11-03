@@ -20,9 +20,12 @@
 
 #include "env.h"
 
+//TODO: send a ClientMessage For Shutdown or what
 void se_env_quit(se_env* env)
 {
     env->exitLoop = 1;
+    se_env_release( env );
+    exit(0);
 }
 
 se_env* se_env_init()
@@ -43,12 +46,7 @@ se_env* se_env_init()
 
     env->world = se_world_create();
 
-    //FIXME:
-    // I don't understand, when use Inconsolate, space between chars are
-    // large. but Monaco is perfect.
-    
-    // Inconsolate-13:slant=italic:spacing=mono
-    if ( !se_env_change_font( env, "Monaco-12:spacing=mono" ) ) {
+    if ( !se_env_change_font( env, "Inconsolata-13" ) ) {
         env->xftFont = NULL;
     }
     

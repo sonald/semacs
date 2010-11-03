@@ -38,10 +38,10 @@
 #define G_LOG_DOMAIN "semacs"
 #endif
 
-#define se_error(fmt, ...) g_error( fmt, ##__VA_ARGS__ )
+#define se_error(fmt, ...) g_error( "[%s]: "#fmt, __func__, ##__VA_ARGS__ )
 #define se_msg(fmt, ...)   g_message( fmt, ##__VA_ARGS__ )
 #define se_warn(fmt, ...)  g_warning( fmt, ##__VA_ARGS__ )
-#define se_debug(fmt, ...) g_debug( fmt, ##__VA_ARGS__ )
+#define se_debug(fmt, ...) g_debug( "[%s]: "#fmt, __func__, ##__VA_ARGS__ )
 
 #ifndef MIN
 #define MIN(a, b) ({                            \
@@ -65,5 +65,18 @@
         })
 #endif
 
+#define ARRAY_LEN(arr)  (sizeof(arr) / sizeof(arr[0]))
+
+#define IN_SET(elem, set_range) ({              \
+            gboolean is_in = FALSE;             \
+            switch ( elem ) {                   \
+            case  set_range:                    \
+                is_in = TRUE;                   \
+                break;                          \
+            default:                            \
+                is_in = FALSE;                  \
+            }                                   \
+            is_in;                              \
+        })
 #endif
 

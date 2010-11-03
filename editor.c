@@ -1,4 +1,3 @@
-
 /**
  * Editor Impl - 
  * Copyright (C) 2010 Sian Cao <sycao@redflag-linux.com>
@@ -23,6 +22,37 @@
 
 #include <libgen.h>
 
+const char gFundamentalModeName[] = "Fundamental";
+const char gFundamentalModeMapName[] = "fundamental-mode-map";
+
+static se_modemap* se_world_init_fundamentalModeMap()
+{
+    g_assert( !fundamentalModeMap );
+    fundamentalModeMap = se_modemap_full_create( gFundamentalModeMapName );
+    // do sanity check
+    se_modemap_dump( fundamentalModeMap );
+    return fundamentalModeMap;
+}
+
+static int se_world_create_fundamentalMode(se_world* world)
+{
+    g_assert( !fundamentalMode );
+    fundamentalMode = se_mode_create( gFundamentalModeName,
+                                      se_world_init_fundamentalModeMap );
+    world->registerModemap( world, fundamentalModeMap );
+    return TRUE;
+}
+
+void se_world_registerModemap(se_world* world, se_modemap* map)
+{
+    g_assert( world && map );
+    if ( !world->modemap_hash ) {
+        world->modemap_hash = g_hash_table_new( g_str_hash, g_str_equal );
+    }
+    g_hash_table_insert( world->modemap_hash,
+                         strdup(gFundamentalModeName), fundamentalMode );
+}
+
 static int se_world_init(se_world* world)
 {
     assert( world );
@@ -33,17 +63,23 @@ static int se_world_init(se_world* world)
     /*     assert( world->bufferList && world->current ); */
     /*     world->current->insertString( world->current, init_str ); */
     /* } */
-
+    
+    se_world_create_fundamentalMode( world );
+    g_assert( fundamentalMode );
+    
     if ( world->bufferCreate(world, "*scratch*") == TRUE ) {
         assert( world->bufferList && world->current );
         world->current->setFileName( world->current, "readme.txt" );
+        world->current->setMajorMode( world->current, gFundamentalModeName );
         world->current->readFile( world->current );
     }
+
     return TRUE;
 }
 
 static int se_world_finish(se_world* world)
 {
+    g_assert( world );
     if ( world->bufferList ) {
         while ( world->current ) {
             se_buffer* bufp = world->current;
@@ -55,6 +91,12 @@ static int se_world_finish(se_world* world)
     }
     
     return TRUE;
+}
+
+se_mode* se_world_getMajorMode(se_world* world, const char* mode_name)
+{
+    g_assert( world && mode_name );
+    return (se_mode*) g_hash_table_lookup( world->modemap_hash, mode_name );
 }
 
 static int se_world_saveFile(se_world* world, const char* file_name)
@@ -87,7 +129,7 @@ static int se_world_loadFile(se_world* world, const char* file_name)
 
 static int se_world_bufferCreate(se_world* world, const char* buf_name)
 {
-    se_buffer *bufp = se_buffer_create( buf_name );
+    se_buffer *bufp = se_buffer_create( world, buf_name );
     if ( !world->bufferList ) {
         world->bufferList = bufp;
     } else {
@@ -140,6 +182,20 @@ static char* se_world_bufferGetName(se_world* world)
     return 0;
 }
 
+
+static int se_world_dispatchCommand(se_world* world, se_command_args* args, se_key key)
+{
+    se_debug( "" );
+    se_buffer *bufp = world->current;
+    se_modemap *map = bufp->majorMode->modemap;
+    g_assert( map );
+
+    se_key_command_t cmd = se_modemap_lookup_command( map, key );
+    g_assert( cmd );
+    
+    return cmd( bufp->world, args, key);
+}
+
 se_world* se_world_create()
 {
     se_world* world = g_malloc0( sizeof(se_world) );
@@ -156,6 +212,11 @@ se_world* se_world_create()
     world->bufferChangeName = se_world_bufferChangeName;
     world->bufferGetName = se_world_bufferGetName;
 
+    world->getMajorMode = se_world_getMajorMode;
+    world->registerModemap = se_world_registerModemap;
+    
+    world->dispatchCommand = se_world_dispatchCommand;
+    
     world->init( world );
     
     return world;

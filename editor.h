@@ -22,6 +22,7 @@
 #define _semacs_editor_h
 
 #include "util.h"
+#include "modemap.h"
 #include "buffer.h"
 
 DEF_CLS(se_world);
@@ -30,6 +31,9 @@ struct se_world
     se_buffer *bufferList;
     se_buffer *current;
 
+    // mode map name <-> mode map obj
+    se_modemap_hash *modemap_hash;
+    
     int (*init)(se_world*);
     int (*finish)(se_world*);
 
@@ -43,11 +47,18 @@ struct se_world
     char* (*bufferSetNext)(se_world*); // return next bufffer's name
     int (*bufferChangeName)(se_world*, const char* buf_name);
     char* (*bufferGetName)(se_world*);
+
+    se_mode* (*getMajorMode)(se_world*, const char* mode_name);
+
+    void (*registerModemap)(se_world*, se_modemap*);
     
+    int (*dispatchCommand)(se_world*, se_command_args*, se_key);
 };
 
 extern se_world* se_world_create();
 extern void se_world_free(se_world*);
 
 #endif
+
+
 
