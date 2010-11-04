@@ -52,6 +52,7 @@ int main_loop(int argc, char *argv[])
         
         switch( ev.type ) {
         case Expose:
+            /* se_debug( "Expose" ); */
             if ( ev.xexpose.count > 0 )
                 break;
 
@@ -82,6 +83,7 @@ int main_loop(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-    return main_loop(argc, argv);
+    /* return test_keys(argc, argv); */
+   return main_loop(argc, argv);
 }
 

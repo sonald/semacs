@@ -82,7 +82,7 @@ static se_line* se_line_insert(se_line* lp, int start, char* data, int len)
 /**
  * just return original lp for sequencial call
  */
-static se_line* se_line_delete(se_line* lp, int start, int len)
+SE_UNUSED static se_line* se_line_delete(se_line* lp, int start, int len)
 {
     
     return lp;
@@ -133,6 +133,11 @@ int se_buffer_init(se_buffer* bufp)
 int se_buffer_release(se_buffer* bufp)
 {
     return 0;
+}
+
+int se_buffer_isModified(se_buffer* bufp)
+{
+    return bufp->modified;
 }
 
 int se_buffer_setPoint(se_buffer* bufp, int new_pos)
@@ -302,7 +307,7 @@ int se_buffer_readFile(se_buffer* bufp)
     se_debug( "canon_name: %s", canon_name );
     
     struct stat statbuf;
-    if ( lstat(bufp->fileName, &statbuf) < 0 ) {
+    if ( lstat(canon_name, &statbuf) < 0 ) {
         se_error( "lstat failed: %s", strerror(errno) );
         return FALSE;
     }
@@ -325,26 +330,17 @@ int se_buffer_readFile(se_buffer* bufp)
     
     g_clear_error( &error );
     g_assert( str != NULL && str_len >= 0 );
-    
-    char *sp = str, *buf = str;
-    size_t buf_len = 0;
-    int line_incr = 0, char_incr = 0;
 
-    while ( buf - str < str_len  ) {
-        sp = strchr( buf, '\n' );
-        se_line *lp = NULL;
-        
-        if ( !sp ) {
-            buf_len = strlen( buf );
-            lp = se_line_alloc( buf, buf_len );
-            char_incr += buf_len;
-            
-        } else {
-            buf_len = sp - buf;
-            lp = se_line_alloc( buf, buf_len );
-            ++line_incr;
-            char_incr += buf_len + 1; // plus 1 is for invisible '\n'
-        }
+    //se_buffer_clear_content( bufp );
+
+    int line_incr = 0, char_incr = 0;
+    gchar** lines = g_strsplit_set( str, "\n", -1 );
+    gchar** linep = lines;    
+    while ( *linep ) {
+        int buf_len = strlen( *linep );
+        se_line *lp = se_line_alloc( *linep, buf_len );
+        char_incr += buf_len + 1;  // 1 is for '\n'
+        ++line_incr;
         
         if ( bufp->lines ) {
             se_line *lp1 = bufp->lines->previous;
@@ -359,12 +355,10 @@ int se_buffer_readFile(se_buffer* bufp)
             lp->previous = lp;
         }
 
-        if ( !sp )
-            break;
-        
-        buf = sp+1;
+        ++linep;
     }
-
+    g_strfreev( lines );
+    
     bufp->lineCount = line_incr;
     bufp->curLine = line_incr;
     bufp->charCount = char_incr;
@@ -373,14 +367,52 @@ int se_buffer_readFile(se_buffer* bufp)
     bufp->modified = TRUE;
 
     se_debug( "read file: lines %d, chars: %d", bufp->lineCount, bufp->charCount );
-    
-    g_free( str );
     return TRUE;
 }
 
 int se_buffer_insertFile(se_buffer* bufp, const char* fileName)
 {
-    return 0;
+    assert( bufp && fileName );
+    
+    char * canon_name = realpath( fileName, NULL );
+    if ( !canon_name ) {
+        se_warn( "%s does not exists", fileName );
+        return FALSE;
+    }
+    se_debug( "canon_name: %s", canon_name );
+    
+    struct stat statbuf;
+    if ( lstat(canon_name, &statbuf) < 0 ) {
+        se_error( "lstat failed: %s", strerror(errno) );
+        return FALSE;
+    }
+
+    //FIXME: check size in a more elegant way
+    if ( statbuf.st_size > (1<<28) ) {
+        se_debug( "file is too large, so read a big block each time" );
+        //TODO: 
+    }
+    
+    GError *error = NULL;
+    size_t data_len = 0;
+    char *data = NULL;
+    if ( g_file_get_contents(canon_name, &data, &data_len, &error) == FALSE ) {
+        se_error( "read file failed: %s", error->message );
+        g_error_free( error );
+        return FALSE;
+    }
+    free( canon_name );
+    
+    g_clear_error( &error );
+    g_assert( data != NULL && data_len >= 0 );
+
+    gchar** lines = g_strsplit_set( data, "\n", -1 );
+    while ( *lines ) {
+
+    }
+    g_strfreev( lines );
+    
+    return TRUE;
 }
 
 int se_buffer_appendMode(se_buffer* bufp, const char* mode, int se_buffer_init_proc(se_mode*), int isFront )
@@ -409,7 +441,23 @@ int se_buffer_setMajorMode(se_buffer* bufp, const char* mode)
 
 void se_buffer_insertChar(se_buffer* bufp, int c)
 {
+    se_debug( "%c(0x%x)", c, c );
 
+    se_line *lp = bufp->getCurrentLine( bufp );
+    g_assert( lp );
+
+    int n = se_line_getLineLength( lp );
+    char buf[2] = { c, 0 };
+    se_line_insert( lp, n, buf, strlen(buf) );
+
+    se_debug( "line No.%d, after: %s", bufp->curLine, se_line_getData(lp) );
+    bufp->position++;
+    bufp->charCount++;
+    
+    /* bufp->lineCount = line_incr; */
+    /* bufp->curLine = line_incr; */
+
+    bufp->modified = TRUE;
 }
 
 /**
@@ -502,6 +550,8 @@ se_buffer* se_buffer_create(se_world* world, const char* buf_name)
     
     bufp->init = se_buffer_init;
     bufp->release = se_buffer_release;
+
+    bufp->isModified = se_buffer_isModified;
     bufp->setPoint = se_buffer_setPoint;
     bufp->getChar = se_buffer_getChar;
     bufp->getStr = se_buffer_getStr;

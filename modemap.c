@@ -25,137 +25,246 @@
 se_mode* fundamentalMode = NULL;
 se_modemap *fundamentalModeMap = NULL;
 
-char* se_key_to_string(se_key key)
+struct se_modemap_data
 {
-    GString *gstr = g_string_new("");
+    se_key key;
+    se_key_command_t cmd;  // Null of the node is a non-leaf node
+};
 
-    if ( key.modifiers & ControlDown ) g_string_append_printf( gstr, "C-" );
-    if ( key.modifiers & MetaDown    ) g_string_append_printf( gstr, "M-" );
-    if ( key.modifiers & SuperDown   ) g_string_append_printf( gstr, "S-" );
-    if ( key.modifiers & EscapeDown  ) g_string_append_printf( gstr, "Esc " );
-    if ( key.modifiers & Button1Down ) g_string_append_printf( gstr, "B1-" );
-    if ( key.modifiers & Button2Down ) g_string_append_printf( gstr, "B2-" );
-    if ( key.modifiers & Button3Down ) g_string_append_printf( gstr, "B3-" );
-
-    if ( isprint(key.ascii) )
-        g_string_append_printf( gstr, "%c", key.ascii );        
-    else if ( key.ascii != 0xffff )
-        g_string_append_printf( gstr, "\\x%x", key.ascii );
-
-    return g_string_free( gstr, FALSE );
-}
-
-int se_key_is_control(se_key key)
+static GNode* se_modemap_search_next_level(se_modemap *map, GNode *node, se_key key)
 {
-    return ( key.ascii == 0xffff && key.modifiers > 0 );
-}
-
-int se_key_is_only(se_key key, unsigned short modifier)
-{
-    return (key.ascii == 0xffff && key.modifiers == modifier );
-}
-
-se_key se_key_null_init()
-{
-    return (se_key) {0, 0};
-}
-
-int se_key_is_null(se_key key)
-{
-    return (key.ascii == 0xffff || key.ascii == 0) && (key.modifiers == 0);
+    g_assert( map && node );
+   /* se_debug( "search for %s", se_key_to_string(key) ); */
     
+    GNode *np = g_node_first_child ( node );
+    while ( np ) {
+        se_modemap_data *data = np->data;
+        if ( se_key_is_equal(data->key, key) ) {
+           /* se_debug( "find %s at level %d", se_key_to_string(key), g_node_depth(np) ); */
+            return np;
+        }
+        np = g_node_next_sibling( np );
+    }
+
+    return NULL;
 }
 
-int se_key_is_equal(se_key key1, se_key key2)
+static GNode* se_modemap_find_match_node(se_modemap* map, se_key_seq keyseq)
 {
-    return  (key1.ascii == key2.ascii) && (key1.modifiers == key2.modifiers );
+    g_assert( map );
+
+    int i = 0;
+    GNode *np = se_modemap_search_next_level(map, map->root, keyseq.keys[i++]);
+    while ( np ) {
+        if ( i == keyseq.len )
+            break;
+        np = se_modemap_search_next_level(map, np, keyseq.keys[i++]);
+    }
+
+    return np;
+}
+
+se_modemap* se_modemap_simple_create(const char* map_name )
+{
+    g_assert( map_name && map_name[0] );
+    
+    se_modemap *map = g_malloc0( sizeof(se_modemap) );
+    strncpy( map->mapName, map_name, sizeof map->mapName - 1 );
+    se_modemap_data *root_data = g_malloc0( sizeof(se_modemap_data) );
+    root_data->key = se_key_null_init();
+    map->root = g_node_new( root_data );
+    return map;
 }
 
 se_modemap* se_modemap_full_create(const char* map_name )
 {
     g_assert( map_name && map_name[0] );
     
-    se_modemap *map = g_malloc0( sizeof(se_modemap) );
-    strncpy( map->mapName, map_name, sizeof map->mapName - 1 );
-    map->keyToCmds = g_hash_table_new( NULL, NULL );    
-
+    se_modemap *map = se_modemap_simple_create( map_name );
     for (int i = 1; i < 128; ++i) {
-        se_key sekey = { 0, i };
-        int key = se_key_to_int( sekey );
-        se_key_command_t val = (gpointer)se_self_silent_command;
+        se_key_command_t cmd = se_self_silent_command;
         if ( isprint(i) ) {
-            val = (gpointer)se_self_insert_command;
+            cmd = se_self_insert_command;
         }
-        g_hash_table_insert( map->keyToCmds, GUINT_TO_POINTER(key), val );
+
+        se_key_seq keyseq = {
+            1, {{0, i}}
+        };
+        se_modemap_insert_keybinding( map, keyseq, cmd );
     }
+
+    se_modemap_insert_keybinding_str( map, "C-x C-c", se_editor_quit_command );
+    se_modemap_insert_keybinding_str( map, "C-g", se_kbd_quit_command );
+    
     return map;
+}
+
+se_key_command_t se_modemap_lookup_command_ex( se_modemap *map, se_key_seq keyseq )
+{
+    GNode *np = se_modemap_find_match_node( map, keyseq );
+    if ( np ) {
+        se_modemap_data *data = np->data;
+        if ( data->cmd )
+            return data->cmd;
+    }
+
+    return se_second_dispatch_command;
+}
+
+se_key_command_t se_modemap_lookup_command( se_modemap *map, se_key key )
+{
+    GNode *np = se_modemap_search_next_level( map, map->root, key );
+    if ( np ) {
+        if ( G_NODE_IS_LEAF(np) ) {
+            se_modemap_data *data = np->data;
+            g_assert( data->cmd );            
+            return data->cmd;
+        } else {
+            return se_second_dispatch_command;
+        }
+    }
+    return NULL;
+}
+
+se_key_command_t se_modemap_lookup_keybinding( se_modemap *map, se_key_seq keyseq )
+{
+    GNode *np = se_modemap_find_match_node( map, keyseq );
+    if ( np && G_NODE_IS_LEAF(np) ) {
+        se_modemap_data *data = np->data;
+        g_assert( data->cmd );
+        return data->cmd;
+    }
+
+    return NULL;
+}
+
+int se_modemap_keybinding_exists_str(se_modemap* map, const char* keys_rep)
+{
+    g_assert( map && keys_rep );
+    se_key_seq keyseq = se_key_seq_from_string( keys_rep );
+    return se_modemap_keybinding_exists( map, keyseq );
+    
+}
+
+int se_modemap_keybinding_exists(se_modemap* map, se_key_seq keyseq)
+{
+    GNode *np = se_modemap_find_match_node( map, keyseq );
+    if ( np ) {
+        if ( G_NODE_IS_LEAF(np) ) {
+            se_modemap_data *data = np->data;
+            g_assert( data->cmd );
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void se_modemap_insert_keybinding(se_modemap* map, se_key_seq keyseq,
+                                  se_key_command_t cmd)
+{
+    se_modemap_insert_keybinding_str( map, se_key_seq_to_string(keyseq), cmd );
+}
+
+// remove the whole sub tree under parent, parent is excluded
+static void se_delete_subtree( GNode *parent )
+{
+    g_assert( parent );
+    GNode *np = g_node_first_child( parent );
+    while ( np ) {
+        g_node_unlink( np );
+        g_node_destroy( np );
+        np = g_node_first_child( parent );
+    }
+}
+
+void se_modemap_insert_keybinding_str( se_modemap *map, const char* keys_rep,
+                                   se_key_command_t cmd )
+{
+    g_assert( map && keys_rep && cmd );
+    se_key_seq keyseq = se_key_seq_from_string( keys_rep );
+    if ( keyseq.len <= 0 ) {
+        se_warn( "bad key seq" );
+        return;
+    }
+    
+    if ( se_modemap_keybinding_exists(map, keyseq) ) {
+        /* se_msg("remap an existed keybinding" ); */
+    }
+
+    GNode *node = map->root;
+    int need_create_node = FALSE; // trace from which level we need to create nodes
+    for (int i = 0; i < keyseq.len; ++i) {
+        se_key key = keyseq.keys[i];
+        /* se_debug( "current key %s", se_key_to_string(key) ); */
+        
+        if ( !need_create_node ) {
+            GNode *key_node = se_modemap_search_next_level(map, node, key);
+            if ( !key_node ) {
+                need_create_node = TRUE;
+                --i;
+                /* se_debug( "set need_create_node and i = %d", i ); */
+                continue;
+            }
+            
+            /* se_debug( "key %s exists at level %d", se_key_to_string(key), */
+            /*           g_node_depth(node) ); */
+            node = key_node;
+            se_modemap_data *data = key_node->data;
+            g_assert( data );
+            g_assert( se_key_is_equal(key, data->key) );
+            
+            if ( i+1 == keyseq.len ) { // bind to a cmd
+                if ( !G_NODE_IS_LEAF(key_node) )  {
+                    // delete sub tree
+                    /* se_debug( "delete sub tree" ); */
+                    se_delete_subtree( key_node );
+                }
+
+                g_assert( G_NODE_IS_LEAF(key_node) );
+                data->cmd = cmd;
+                /* se_debug( "rebind key %s", se_key_to_string(key) ); */
+                
+            } else {
+                if ( G_NODE_IS_LEAF(key_node) ) {
+                    g_assert( data->cmd );
+                    data->cmd = NULL;
+                    need_create_node = TRUE; // create nodes from next level
+                    /* se_debug( "set need_create_node, reset key %s to Null", */
+                    /*           se_key_to_string(key) ); */
+                    
+                } else {
+                    g_assert( data->cmd == NULL );
+                }
+            }
+            
+        } else {
+            se_modemap_data *data = g_malloc0( sizeof(se_modemap_data) );
+            data->key = key;
+            GNode *key_node = g_node_append_data( node, data );
+            if ( i+1 == keyseq.len ) { // bind to a cmd
+                /* se_debug( "leaf node (level %d) of key %s: bind cmd", */
+                /*           g_node_depth(key_node), se_key_to_string(data->key) ); */
+                data->cmd = cmd;
+            }
+            node = key_node;
+        }
+    }
 }
 
 void se_modemap_free(se_modemap* modemap)
 {
     g_assert( modemap );
-    g_hash_table_destroy( modemap->keyToCmds );
-}
-
-static se_key_command_t se_modemap_search_cmd(se_modemap* modemap, se_key key) 
-{
-    g_assert( modemap );
-    se_debug( "" );
-
-    GHashTableIter iter;
-    gpointer hkey, hval;
-    g_hash_table_iter_init( &iter, modemap->keyToCmds );
-    
-    while( g_hash_table_iter_next(&iter, &hkey, &hval) ) {
-        se_key sekey = int_to_se_key( GPOINTER_TO_UINT(hkey) );
-        if ( se_key_is_equal(sekey, key) ) {
-            se_debug( "find key: %s, val: 0x%x",
-                      se_key_to_string(sekey), (guint)hval );
-            return (se_key_command_t)hval;
-        }
-    }
-
-    return NULL;
-}
-
-se_key_command_t se_modemap_lookup_command(se_modemap* modemap, se_key key)
-{
-    g_assert( modemap && modemap->keyToCmds );
-    /* se_debug( "find cmd for key [%s] in map %s", se_key_to_string(key), */
-    /*           modemap->mapName ); */
-
-    /* guint k; */
-    /* memcpy( &k, &key, sizeof key ); */
-    /* gpointer p = g_hash_table_lookup( modemap->keyToCmds, GUINT_TO_POINTER(k) ); */
-
-    gpointer p = se_modemap_search_cmd( modemap, key );
-    se_debug( "find cmd: 0x%x", (int)p );
-    if ( p ) {
-        return (se_key_command_t)p;
-    }
-
-    return NULL;
+    g_node_destroy( modemap->root );
 }
 
 void se_modemap_dump(se_modemap* modemap) 
 {
     g_assert( modemap );
-    se_debug( "" );
+    GNode *np = modemap->root;
+    g_assert( np );
+    
 
-    GHashTableIter iter;
-    gpointer key, val;
-    g_hash_table_iter_init( &iter, modemap->keyToCmds );
-
-    int count = 0;
-    while( g_hash_table_iter_next(&iter, &key, &val) ) {
-        int ik = GPOINTER_TO_UINT(key);
-        se_key sekey;
-        memcpy( &sekey, &ik, sizeof sekey );
-        se_key_command_t cmd = (se_key_command_t)val;
-        se_debug( "key: %s, val: 0x%x", se_key_to_string(sekey), (guint)cmd );
-        ++count;
-    }
-    se_debug( "total %d keys", count );
+    /* se_debug( "total %d keys", count ); */
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -176,21 +285,6 @@ static int se_mode_init(se_mode* modep)
     modep->bindMap( modep, modep->initMap( modep ) );
     // run modemap hooks
 
-    return TRUE;
-}
-
-int se_self_silent_command(se_world* world, se_command_args* args, se_key key)
-{
-    se_debug( "unprintable char, ignore" );
-    return TRUE;
-}
-
-int se_self_insert_command(se_world* world, se_command_args* args, se_key key)
-{
-    if ( isprint(key.ascii) ) {
-        world->current->insertChar( world->current, key.ascii );
-    }
-    
     return TRUE;
 }
 

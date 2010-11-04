@@ -22,90 +22,48 @@
 #define _semacs_modemap_h
 
 #include "util.h"
+#include "key.h"
+#include "cmd.h"
 
-enum {
-    SE_PREFIX_ARG,
-    SE_EXIT_ARG,
-};
-
-DEF_CLS(se_command_args);
-struct se_command_args
-{
-    int flags;
-    int prefix_arg;
-};
-
-enum {
-    ControlDown = 0x01,
-    ShiftDown   = 0x02,
-    MetaDown    = 0x04, // Meta or Alt
-    SuperDown   = 0x08,  // Super or Hyper
-    EscapeDown  = 0x10,
-    Button1Down = 0x20,
-    Button2Down = 0x40,
-    Button3Down = 0x80,
-    // double-click?
-    // triple-click?
-
-    /* SeKeyUp     = 0x1000,   */
-    /* SeKeyDown   = 0x2000,     */
-};
-
-DEF_CLS(se_key);
-struct se_key
-{
-    unsigned short  modifiers;
-    unsigned short ascii; // > 0 if se_key is a isprint, else -1
-};
-
-extern se_key se_key_null_init();
-extern char* se_key_to_string(se_key);
-extern se_key se_keycode_to_sekey(KeyCode);
-extern int se_key_is_control(se_key);
-extern int se_key_is_null(se_key);
-extern int se_key_is_only(se_key, unsigned short modifier);
-// this will compare both ascii and modifiers
-extern int se_key_is_equal(se_key key1, se_key key2);
-
-static inline int se_key_to_int(se_key sekey)
-{
-    int ikey;
-    memmove( &ikey, &sekey, sizeof sekey );
-    return ikey;
-}
-    
-static inline se_key int_to_se_key(int ikey)
-{
-    se_key sekey;
-    memmove( &sekey, &ikey, sizeof sekey );
-    return sekey;
-}
-
-struct se_world;
-typedef int (*se_key_command_t)(struct se_world* world, se_command_args* args, se_key key);
-
-
-extern int se_self_insert_command(struct se_world*, se_command_args*, se_key);
-extern int se_self_silent_command(struct se_world*, se_command_args*, se_key);
-
+DEF_CLS(se_modemap_data);
 DEF_CLS(se_modemap);
 struct se_modemap
 {
     char mapName[64];
-    GHashTable *keyToCmds;
+    /**
+     * key map to se_modemap_data, it's either a cmd, or a 2nd disptach table
+     */
+    GNode* root; // root store no key or cmd, the summary info
 };
 
+extern se_modemap* se_modemap_simple_create(const char*);
 extern se_modemap* se_modemap_full_create(const char*);
 extern void se_modemap_free(se_modemap*);
-extern se_key_command_t se_modemap_lookup_command(se_modemap*, se_key);
 extern void se_modemap_dump(se_modemap*);
+
+/**
+ * this two functions will also return cmd which is a 2nd dispatch cmd but not
+ * a binding cmd, meaning key is the prefix of a binding, and awaits for the
+ * coming keys to complete.
+ */
+extern se_key_command_t se_modemap_lookup_command( se_modemap *map, se_key key );
+extern se_key_command_t se_modemap_lookup_command_ex( se_modemap *map, se_key_seq );
+
+/**
+ * this will only search for a full keybinding
+ */
+extern se_key_command_t se_modemap_lookup_keybinding( se_modemap *map, se_key_seq );
+
+extern void se_modemap_insert_keybinding_str(se_modemap*, const char*, se_key_command_t);
+extern void se_modemap_insert_keybinding(se_modemap*, se_key_seq, se_key_command_t);
+
+extern int se_modemap_keybinding_exists_str(se_modemap*, const char*);
+extern int se_modemap_keybinding_exists(se_modemap*, se_key_seq);
 
 ////////////////////////////////////////////////////////////////////////////////
 
 // struct to cached all created modemap 
 typedef GHashTable se_modemap_hash;
-
-
 
 DEF_CLS(se_mode);
 struct se_mode

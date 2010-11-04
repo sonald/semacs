@@ -7,20 +7,34 @@ HFILES= util.h \
 	env.h \
 	modemap.h \
 	buffer.h \
-	xview.h
+	key.h \
+	cmd.h \
+	xview.h \
+	submatch.h
 
-OFILES= obj/xview.o \
+OFILES= \
+	obj/xview.o \
 	obj/util.o \
 	obj/env.o \
 	obj/editor.o \
 	obj/buffer.o \
 	obj/modemap.o \
-	obj/main.o
+	obj/key.o \
+	obj/cmd.o \
+	obj/multimatch.o \
+	obj/singlematch.o
 
 
-all: semacs
+TESTOFILES= \
+	obj/testsuites.o
 
-semacs: $(OFILES)
+
+all: semacs test_semacs
+
+test_semacs: $(TESTOFILES) $(OFILES)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+semacs: $(OFILES) obj/main.o
 	$(CC) -o $@ $^ $(LDFLAGS) 
 
 

@@ -18,6 +18,7 @@
  */
 
 #include "xview.h"
+#include "key.h"
 
 SE_VIEW_HANDLER( se_text_viewer_key_event );
 SE_VIEW_HANDLER( se_text_viewer_mouse_event );
@@ -152,25 +153,15 @@ static void se_text_viewer_redisplay(se_text_viewer* viewer )
     se_buffer *cur_buf = world->current;
     g_assert( cur_buf );
     int nr_lines = cur_buf->getLineCount( cur_buf );
+    se_debug( "update buf %s [%d, %d]", cur_buf->getBufferName(cur_buf),
+              viewer->columns, MIN(viewer->rows, nr_lines) );    
 
+    se_text_viewer_move_cursor( viewer, 0, 0 );
     for (int r = 0; r < MIN(viewer->rows, nr_lines); ++r) {
         char *data = viewer->content + r*SE_MAX_ROWS;
         int data_len = strlen( data );
         se_draw_text_utf8( viewer, &clr, data, MIN(data_len, viewer->columns) );
         se_text_viewer_move_cursor( viewer, 0, viewer->cursor.row + 1 );
-
-        // when use 'Monaco', se_draw_char_utf8 or se_draw_text_utf8 will
-        // produce exactly the same effect on display.
-        
-        /* for (int i = 0; i < data_len; ++i) { */
-        /*     se_draw_char_utf8( viewer, &clr, data[i] ); */
-        /*     se_text_viewer_forward_cursor( viewer, 1 ); */
-        /* } */
-        /* se_text_viewer_move_cursor( viewer, 0, viewer->cursor.row + 1 ); */
-        
-        /* char tmp[MIN(data_len, viewer->columns)]; */
-        /* snprintf( tmp, sizeof(tmp), "%s", data); */
-        /* se_debug( "draw: %s", tmp ); */
     }
 
     XftColorFree( env->display, env->visual, env->colormap, &clr );
@@ -234,7 +225,7 @@ static se_key se_key_event_process( Display *display, XKeyEvent kev )
     
     char *key_str = XKeysymToString( key_sym );
     if ( key_sym == XK_Escape ) {
-        sekey.modifiers |= EscapeDown;
+        sekey.modifiers = EscapeDown;
     }
     
     if ( strlen(key_str) > 1 ) {
@@ -299,6 +290,11 @@ void se_text_viewer_key_event(se_text_viewer* viewer, XEvent* ev )
             sekey = se_delayed_wait_key( viewer );
             if ( se_key_is_only( sekey, EscapeDown ) )
                 se_env_quit( viewer->env );
+        }
+
+        if ( world->current->isModified(world->current) ) {
+            viewer->repaint( viewer );
+            viewer->redisplay( viewer );
         }
     }    
 }

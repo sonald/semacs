@@ -73,6 +73,8 @@ struct se_buffer
     
     int (*setPoint)(se_buffer*, int);
     int (*getPoint)(se_buffer*);
+
+    int (*isModified)(se_buffer*);
     
     int (*getChar)(se_buffer*);
     char* (*getStr)(se_buffer*, int max);

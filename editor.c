@@ -191,7 +191,10 @@ static int se_world_dispatchCommand(se_world* world, se_command_args* args, se_k
     g_assert( map );
 
     se_key_command_t cmd = se_modemap_lookup_command( map, key );
-    g_assert( cmd );
+    if ( !cmd ) {
+        se_warn( "key[%s] is not map", se_key_to_string(key) );
+        return TRUE;
+    }
     
     return cmd( bufp->world, args, key);
 }

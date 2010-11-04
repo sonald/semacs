@@ -32,6 +32,7 @@
 
 #define DEF_CLS(_name) typedef struct _name _name
 
+#define SE_UNUSED __attribute__ ((unused))
 
 #ifdef G_LOG_DOMAIN
 #undef G_LOG_DOMAIN
@@ -40,7 +41,7 @@
 
 #define se_error(fmt, ...) g_error( "[%s]: "#fmt, __func__, ##__VA_ARGS__ )
 #define se_msg(fmt, ...)   g_message( fmt, ##__VA_ARGS__ )
-#define se_warn(fmt, ...)  g_warning( fmt, ##__VA_ARGS__ )
+#define se_warn(fmt, ...)  g_warning( "[%s]: "#fmt, __func__, ##__VA_ARGS__ )
 #define se_debug(fmt, ...) g_debug( "[%s]: "#fmt, __func__, ##__VA_ARGS__ )
 
 #ifndef MIN
