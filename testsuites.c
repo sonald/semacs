@@ -5,6 +5,18 @@
 #include "cmd.h"
 #include "modemap.h"
 
+void test_glib_funcs()
+{
+    gchar** lines = g_strsplit_set( "\n\taaa\n\nbbb\ncc\n", "\n\t", -1 );
+    gchar** linep = lines;    
+    while ( *linep ) {
+        se_debug( "cur: [%s]", *linep );
+        ++linep;
+    }
+    g_strfreev( lines );
+    
+}
+
 void test_keys()
 {
     se_key key = se_key_from_string( "C-M-S-H-x" );
@@ -188,6 +200,7 @@ int main(int argc, char *argv[])
 {
     g_test_init( &argc, &argv, NULL );
 
+    g_test_add_func( "/semacs/glib", test_glib_funcs );
     g_test_add_func( "/semacs/keys/1",  test_keys );
     g_test_add_func( "/semacs/keys/2",  test_keys2 );    
     g_test_add_func( "/semacs/modemap/simple/1", test_modemap1 );

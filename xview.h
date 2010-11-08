@@ -74,11 +74,9 @@ struct se_text_viewer
     int physicalHeight; // real height of view
 
     gchar *content;  // which contains columns * rows chars, may utf8 next version
-    
     XftDraw *xftDraw;
-
-    se_position physicalCursor;  // where cursor is, size in pixels
-    se_cursor cursor; // where cursor is, pos in logical (row, col)
+    se_cursor cursor; // where cursor is, pos in logical (row, col),
+                      // this is not point of editor
 
     void (*show)( se_text_viewer* viewer );
     void (*repaint)( se_text_viewer* viewer );

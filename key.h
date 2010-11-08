@@ -32,7 +32,7 @@ enum {
     ShiftDown   = 0x02,
     MetaDown    = 0x04, // Meta or Alt
     SuperDown   = 0x08,  // Super or Hyper
-    EscapeDown  = 0x10,
+//    EscapeDown  = 0x10,
     Button1Down = 0x20,
     Button2Down = 0x40,
     Button3Down = 0x80,

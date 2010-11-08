@@ -31,8 +31,31 @@ DEFINE_CMD(se_self_silent_command)
 
 DEFINE_CMD(se_self_insert_command)
 {
-    g_assert( isprint(key.ascii) );
+    // g_assert( isprint(key.ascii) ); // can not assert, cause any key can bind to this cmd
     world->current->insertChar( world->current, key.ascii );
+    return TRUE;
+}
+
+DEFINE_CMD(se_newline_command)
+{
+    world->current->insertChar( world->current, '\n' );
+    return TRUE;
+}
+
+DEFINE_CMD(se_indent_for_tab_command)
+{
+    //g_assert( key.ascii == XK_Tab );    
+    return TRUE;
+}
+
+DEFINE_CMD(se_backspace_command)
+{
+    //g_assert( key.ascii == XK_BackSpace );    
+    return TRUE;
+}
+
+DEFINE_CMD(se_delete_forward_command)
+{
     return TRUE;
 }
 

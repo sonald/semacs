@@ -57,7 +57,9 @@ struct se_buffer
     int modified;
     
     int position;  // logical offset of cursor
-    int curLine;   // start from ZERO
+    int curLine;   // calculated from point
+    int curColumn; // calculated from point
+
     int charCount;  // length of buffer in chars
     int lineCount;  // total lines
     
@@ -85,6 +87,7 @@ struct se_buffer
     int (*getLineCount)(se_buffer*);    
     int (*getLine)(se_buffer*);
     se_line* (*getCurrentLine)(se_buffer*);
+    int (*getCurrentColumn)(se_buffer*);    
     
     int (*forwardChar)(se_buffer*, int);
     int (*forwardLine)(se_buffer*, int);

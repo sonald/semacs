@@ -185,7 +185,6 @@ static char* se_world_bufferGetName(se_world* world)
 
 static int se_world_dispatchCommand(se_world* world, se_command_args* args, se_key key)
 {
-    se_debug( "" );
     se_buffer *bufp = world->current;
     se_modemap *map = bufp->majorMode->modemap;
     g_assert( map );

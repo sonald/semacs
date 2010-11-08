@@ -24,64 +24,10 @@ SE_VIEW_HANDLER( se_text_viewer_key_event );
 SE_VIEW_HANDLER( se_text_viewer_mouse_event );
 SE_VIEW_HANDLER( se_text_viewer_configure_change_handler );
 
-/* static void se_text_viewer_draw_create( se_text_viewer* viewer ); */
-/* static void se_text_viewer_move_cursor( se_text_viewer* viewer, int col, int row ); */
-static void se_draw_text_utf8( se_text_viewer*, XftColor*, const char*, int );
-
-// if nchars > 0, move forward, else move backward
-/* static void se_text_viewer_forward_cursor( se_text_viewer* viewer, int nchars ) */
-/* { */
-/*     if ( !nchars ) return; */
-    
-/*     assert( viewer ); */
-/*     /\* se_debug( "origin: (%d, %d)", viewer->cursor.column, viewer->cursor.row ); *\/ */
-
-/*     if ( nchars > 0 ) { */
-/*         while ( nchars > 0 ) { */
-/*             if ( viewer->cursor.column + 1 == viewer->columns ) { */
-/*                 viewer->cursor.column = 0; */
-/*                 ++viewer->cursor.row; */
-/*                 --nchars; */
-/*                 continue; */
-/*             } */
-
-/*             ++viewer->cursor.column; */
-/*             --nchars; */
-/*         } */
-
-/*     } else { */
-/*         while ( nchars < 0 ) { */
-/*             if ( viewer->cursor.column == 0 ) { */
-/*                 if ( viewer->cursor.row == 0 ) */
-/*                     break; */
-
-/*                 viewer->cursor.column = viewer->columns-1; */
-/*                 --viewer->cursor.row; */
-/*                 ++nchars; */
-/*                 continue; */
-/*             } */
-
-/*             --viewer->cursor.column; */
-/*             ++nchars; */
-/*         } */
-/*     } */
-    
-/*     viewer->physicalCursor.x = viewer->cursor.column * viewer->env->glyphMaxWidth; */
-/*     viewer->physicalCursor.y = viewer->cursor.row * viewer->env->glyphMaxHeight; */
-    
-/*     /\* se_debug( "after: (%d, %d)", viewer->cursor.column, viewer->cursor.row ); *\/ */
-/* } */
-
-void se_text_viewer_move_cursor( se_text_viewer* viewer, int col, int row )
+static se_position se_text_cursor_to_physical( se_text_viewer* viewer, se_cursor cur )
 {
-    assert( viewer );
-    assert( col >= 0 && col < viewer->columns );
-    assert( row >= 0 && row < viewer->rows );
-    
-    viewer->cursor.column = col;
-    viewer->cursor.row = row;
-    viewer->physicalCursor.x = viewer->cursor.column * viewer->env->glyphMaxWidth;
-    viewer->physicalCursor.y = viewer->cursor.row * viewer->env->glyphMaxHeight;
+    return (se_position){ cur.column * viewer->env->glyphMaxWidth,
+            cur.row * viewer->env->glyphMaxHeight };
 }
 
 static void se_text_viewer_updateSize( se_text_viewer* viewer, int width, int height )
@@ -107,10 +53,71 @@ static void se_text_viewer_show( se_text_viewer* viewer )
     XFlush( viewer->env->display );
 }
 
+SE_UNUSED void se_draw_char_utf8( se_text_viewer* viewer, XftColor* color,
+                                  se_cursor cur, int c )
+{
+    assert( viewer && viewer->xftDraw );
+
+    const se_env* env = viewer->env;
+    se_position cur_pos = se_text_cursor_to_physical(viewer, cur);
+    se_position start_pos = {
+        .x = cur_pos.x,
+        .y = cur_pos.y + env->glyphAscent,
+    };
+    XftDrawStringUtf8( viewer->xftDraw, color, viewer->env->xftFont,
+                       start_pos.x, start_pos.y, (const XftChar8*)&c, 1 );
+}
+
+static void se_draw_text_utf8( se_text_viewer* viewer, XftColor* color,
+                        se_cursor cur, const char* utf8, int utf8_len )
+{
+    assert( viewer && viewer->xftDraw );
+    const se_env* env = viewer->env;
+    se_position cur_pos = se_text_cursor_to_physical(viewer, cur);
+    se_position start_pos = {
+        .x = cur_pos.x,
+        .y = cur_pos.y + env->glyphAscent,
+    };
+    XftDrawStringUtf8( viewer->xftDraw, color, viewer->env->xftFont,
+                       start_pos.x, start_pos.y,
+                       (const XftChar8*)utf8, utf8_len );
+}
+
+static void se_draw_buffer_point( se_text_viewer* viewer )
+{
+    se_env *env = viewer->env;
+    se_world *world = viewer->env->world;
+    g_assert( world );
+
+    se_buffer *cur_buf = world->current;
+    g_assert( cur_buf );
+
+    se_cursor point_cur = {
+        .row = cur_buf->getLine( cur_buf ),
+        .column = cur_buf->getCurrentColumn( cur_buf )
+    };
+    se_position point_pos = se_text_cursor_to_physical( viewer, point_cur );
+    point_pos.y -= (env->glyphMaxHeight - env->glyphAscent)/2;
+    
+
+    XRenderColor renderClr = {
+        .red = 0x00,
+        .green = 0xffff,
+        .blue = 0x00,
+        .alpha = 0x00
+    };
+        
+    XftColor clr;
+    XftColorAllocValue( env->display, env->visual, env->colormap, &renderClr, &clr );
+    
+    XftDrawRect( viewer->xftDraw, &clr, point_pos.x, point_pos.y, 2, env->glyphMaxHeight );
+
+    XftColorFree( env->display, env->visual, env->colormap, &clr );
+}
+
 // send draw event and do real update in redisplay routine
 static void se_text_viewer_repaint( se_text_viewer* viewer )
 {
-    se_debug ( "enter expose event" );
     XWindowAttributes attrs;
     XGetWindowAttributes( viewer->env->display, viewer->view, &attrs);
     viewer->updateSize( viewer, attrs.width, attrs.height );
@@ -125,12 +132,18 @@ static void se_text_viewer_repaint( se_text_viewer* viewer )
     //FIXME: this is slow algo just as a demo, change it later
     se_line* lp = cur_buf->lines;
     int nr_lines = cur_buf->getLineCount( cur_buf );
+    se_debug( "paint rect: rows: %d", nr_lines );
     
     for (int r = 0; r < MIN(viewer->rows, nr_lines); ++r) {
-        memcpy( (viewer->content + r*SE_MAX_ROWS), se_line_getData(lp),
-                se_line_getLineLength(lp) );
+        const char* buf = se_line_getData( lp );
+        int cols = se_line_getLineLength( lp );
+        if ( buf[cols-1] == '\n' ) cols--;
+        memcpy( (viewer->content + r*SE_MAX_ROWS), buf, cols );
+        /* se_debug( "draw No.%d: [%s]", r, buf ); */
         lp = lp->next;
     }
+
+    
 }
 
 static void se_text_viewer_redisplay(se_text_viewer* viewer )
@@ -156,14 +169,19 @@ static void se_text_viewer_redisplay(se_text_viewer* viewer )
     se_debug( "update buf %s [%d, %d]", cur_buf->getBufferName(cur_buf),
               viewer->columns, MIN(viewer->rows, nr_lines) );    
 
-    se_text_viewer_move_cursor( viewer, 0, 0 );
+    // this clear the whole window ( slow )
+    XClearArea( env->display, viewer->view, 0, 0, 0, 0, False );
+    
+    viewer->cursor = (se_cursor){ 0, 0 };
     for (int r = 0; r < MIN(viewer->rows, nr_lines); ++r) {
         char *data = viewer->content + r*SE_MAX_ROWS;
         int data_len = strlen( data );
-        se_draw_text_utf8( viewer, &clr, data, MIN(data_len, viewer->columns) );
-        se_text_viewer_move_cursor( viewer, 0, viewer->cursor.row + 1 );
+        se_draw_text_utf8( viewer, &clr, viewer->cursor,
+                           data, MIN(data_len, viewer->columns) );
+        viewer->cursor = (se_cursor){0, viewer->cursor.row + 1};
     }
 
+    se_draw_buffer_point( viewer );
     XftColorFree( env->display, env->visual, env->colormap, &clr );
 }
 
@@ -211,29 +229,20 @@ static se_key se_key_event_process( Display *display, XKeyEvent kev )
     if ( key_sym == NoSymbol ) {
         se_debug( "NoSymbol for keycode %d", kev.keycode );
     }
-    
+    se_debug( "keysym: %s", XKeysymToString(key_sym) );
     se_key sekey = se_key_null_init();
-    /* if ( key_sym == XK_Control_L */
-    /*      || key_sym == XK_Control_R */
-    /*      || key_sym == XK_Meta_L */
-    /*      || key_sym == XK_Meta_R */
-    /*      || key_sym == XK_Super_L */
-    /*      || key_sym == XK_Super_R */
-    /*      || key_sym == XK_Super_L */
-    /*      || key_sym == XK_Super_R ) */
-    /*     return sekey; */
     
     char *key_str = XKeysymToString( key_sym );
-    if ( key_sym == XK_Escape ) {
-        sekey.modifiers = EscapeDown;
-    }
-    
+
+    // FIXME: this is a simplified version, since KeySym actually follow latin-1
+    // except for some terminal control keys
+    sekey.ascii = key_sym;
     if ( strlen(key_str) > 1 ) {
         se_debug( "sekey: %s", se_key_to_string(sekey) );        
         return sekey;
     }
     
-    sekey.ascii = key_str[0];
+    /* sekey.ascii = key_str[0]; */
     
     if ( kev.state & ControlMask ) {
         sekey.modifiers |= ControlDown;
@@ -245,13 +254,16 @@ static se_key se_key_event_process( Display *display, XKeyEvent kev )
         sekey.modifiers |= MetaDown;
     }
 
-    /* if ( key_sym == XK_Super_L || key_sym == XK_Super_R ) { */
-    /*     sekey.modifiers |= SuperDown; */
-    /* } */
     if ( kev.state & Mod4Mask ) {
         // this is no good, Mod4 can be map to other keysym
         sekey.modifiers |= SuperDown;
     }
+
+    if ( sekey.modifiers == ShiftDown ) { // here Shift is not part of combination
+                                        // only change case of char
+        sekey.modifiers = 0;
+    }
+    
     se_debug( "sekey: %s", se_key_to_string(sekey) );
     return sekey;
 }
@@ -280,7 +292,7 @@ void se_text_viewer_key_event(se_text_viewer* viewer, XEvent* ev )
         if ( se_key_is_null(sekey) )
             return;
     
-        if ( se_key_is_only( sekey, EscapeDown )  )
+        if ( sekey.ascii == XK_Escape )
             se_env_quit( viewer->env );
     
         se_world *world = viewer->env->world;
@@ -288,7 +300,7 @@ void se_text_viewer_key_event(se_text_viewer* viewer, XEvent* ev )
         bzero( &args, sizeof args );
         while ( world->dispatchCommand( world, &args, sekey ) != TRUE ) {
             sekey = se_delayed_wait_key( viewer );
-            if ( se_key_is_only( sekey, EscapeDown ) )
+            if ( sekey.ascii == XK_Escape )
                 se_env_quit( viewer->env );
         }
 
@@ -317,45 +329,6 @@ void se_text_viewer_draw_create( se_text_viewer* viewer )
         viewer->env->display, viewer->view, viewer->env->visual,
         viewer->env->colormap );
 }
-
-/* void se_draw_char_utf8( se_text_viewer* viewer, XftColor* color, int c ) */
-/* { */
-/*     assert( viewer && viewer->xftDraw ); */
-
-/*     const se_env* env = viewer->env; */
-/*     se_position cur_pos = viewer->physicalCursor; */
-/*     se_position start_pos = { */
-/*         .x = cur_pos.x, */
-/*         .y = cur_pos.y + env->glyphAscent, */
-/*     }; */
-/*     XftDrawStringUtf8( viewer->xftDraw, color, viewer->env->xftFont, */
-/*                        start_pos.x, start_pos.y, (const XftChar8*)&c, 1 ); */
-/* } */
-
-void se_draw_text_utf8( se_text_viewer* viewer, XftColor* color,
-                        const char* utf8, int utf8_len )
-{
-    assert( viewer && viewer->xftDraw );
-
-    const se_env* env = viewer->env;
-    se_position cur_pos = viewer->physicalCursor;
-
-    /* XGlyphInfo metric; */
-    /* XftTextExtentsUtf8( env->display, env->xftFont,  */
-    /*                     (const XftChar8*)utf8, utf8_len, &metric); */
-    /* se_debug( "metric: (x %d, y %d, w %d, h %d, xoff %d, yoff %d)", */
-    /*           metric.x, metric.y, metric.width, metric.height, */
-    /*           metric.xOff, metric.yOff ); */
-
-    se_position start_pos = {
-        .x = cur_pos.x,
-        .y = cur_pos.y + env->glyphAscent,
-    };
-    XftDrawStringUtf8( viewer->xftDraw, color, viewer->env->xftFont,
-                       start_pos.x, start_pos.y,
-                       (const XftChar8*)utf8, utf8_len );
-}
-
 
 se_text_viewer* se_text_viewer_create( se_env* env )
 {

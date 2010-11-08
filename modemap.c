@@ -86,6 +86,11 @@ se_modemap* se_modemap_full_create(const char* map_name )
         if ( isprint(i) ) {
             cmd = se_self_insert_command;
         }
+        /* else if ( i == '\n' ) { */
+        /*     cmd = se_newline_command; */
+        /* } else if ( i == '\t' ) { */
+        /*     cmd = se_indent_for_tab_command; */
+        /* } */
 
         se_key_seq keyseq = {
             1, {{0, i}}
@@ -95,7 +100,10 @@ se_modemap* se_modemap_full_create(const char* map_name )
 
     se_modemap_insert_keybinding_str( map, "C-x C-c", se_editor_quit_command );
     se_modemap_insert_keybinding_str( map, "C-g", se_kbd_quit_command );
-    
+    se_modemap_insert_keybinding_str( map, "M-j", se_newline_command );
+    se_modemap_insert_keybinding_str( map, "\\xff0d", se_newline_command );
+    se_modemap_insert_keybinding_str( map, "C-i", se_indent_for_tab_command );
+    se_modemap_insert_keybinding_str( map, "\\xff09", se_indent_for_tab_command );
     return map;
 }
 

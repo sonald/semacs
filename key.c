@@ -36,7 +36,7 @@ char* se_key_to_string(se_key key)
     if ( key.modifiers & Button2Down ) g_string_append_printf( gstr, "B2-" );
     if ( key.modifiers & Button3Down ) g_string_append_printf( gstr, "B3-" );
 
-    if ( key.modifiers & EscapeDown  )
+    if ( key.ascii == XK_Escape  )
         g_string_append_printf( gstr, "Esc" );
     else if ( isprint(key.ascii) )
         g_string_append_printf( gstr, "%c", key.ascii );        
@@ -62,7 +62,7 @@ se_key se_key_from_string( const char* rep )
             key.ascii = rep[0];
             
         } else if ( strcmp(rep, "Esc") == 0 ) {
-            key.modifiers = EscapeDown;
+            key.ascii = XK_Escape;
             
         } else if ( strncmp(rep, "\\x", 2) == 0 ) {
             key.ascii = strtol( rep+2, NULL, 16 );
@@ -124,7 +124,7 @@ se_key se_key_from_string( const char* rep )
         key.ascii = *last_prefix;
     } else {
         if ( strcmp(last_prefix, "Esc") == 0 ) {
-            key.modifiers = EscapeDown;
+            key.ascii = XK_Escape;
         }
     }
 
@@ -132,63 +132,6 @@ se_key se_key_from_string( const char* rep )
     /*           se_key_to_string(key) ); */
     return key;
 }
-
-/* se_key se_key_from_string( const char* rep ) */
-/* { */
-/*     se_key key = se_key_null_init(); */
-/*     regex_t regex; */
-/*     regmatch_t matches[10]; // maximum 10 */
-    
-/*     if ( regcomp( &regex, "([CMSB123]-)*([a-zA-Z]+)", REG_EXTENDED ) != 0 ) { */
-/*         se_error( "regexp is no valid" ); */
-/*         return key; */
-/*     } */
-
-/*     struct match_data { */
-/*         const char* prefix; */
-/*         int modifier; */
-/*     } match_datas[] = { */
-/*         {"C-", ControlDown},  {"M-", MetaDown}, */
-/*         {"S-", ShiftDown},    {"B1-", Button1Down}, */
-/*         {"B2-", Button2Down}, {"B3-", Button3Down}, */
-/*     }; */
-    
-/*     if ( regexec( &regex, rep, 10, matches, 0 ) == 0 ) { */
-/*         for (int i = 0; i < 10; ++i) { */
-/*             if ( matches[i].rm_so < 0 ) */
-/*                 continue; */
-
-/*             const char *s = rep + matches[i].rm_so; */
-/*             int catch_len = matches[i].rm_eo - matches[i].rm_so; */
-/*             se_debug( "match %d %*s", catch_len, catch_len, s ); */
-/*             int j = 0; */
-/*             for (j = 0; j < ARRAY_LEN(match_datas); ++j) { */
-/*                 if ( strncmp(s, match_datas[j].prefix, catch_len) == 0 ) { */
-/*                     se_debug( "catch %s", match_datas[j].prefix ); */
-/*                     key.modifiers |= match_datas[j].modifier; */
-/*                     break; */
-/*                 } */
-/*             } */
-
-/*             if ( j == ARRAY_LEN(match_datas) ) { */
-/*                 if ( catch_len == 1 ) { */
-/*                     se_debug( "catch char %*s", catch_len, s ); */
-/*                     key.ascii = s[0]; */
-/*                 } else { */
-/*                     if ( strncmp(s, "Esc", matches[i].rm_eo) == 0 ) */
-/*                         key.modifiers |= EscapeDown; */
-/*                 } */
-/*             } */
-/*         } */
-/*     } else { */
-/*         se_msg( "key rep '%s' is not valid", rep ); */
-/*     } */
-
-/*     regfree( &regex ); */
-    
-/*     se_debug( "create key: %s", se_key_to_string(key) ); */
-/*     return key; */
-/* } */
 
 int se_key_is_control(se_key key)
 {

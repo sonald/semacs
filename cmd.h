@@ -51,6 +51,12 @@ typedef int (*se_key_command_t)(struct se_world* world, se_command_args* args, s
 
 extern DECLARE_CMD(se_self_insert_command);
 extern DECLARE_CMD(se_self_silent_command);
+
+extern DECLARE_CMD(se_newline_command); // XK_Return
+extern DECLARE_CMD(se_indent_for_tab_command); // XK_Tab
+extern DECLARE_CMD(se_backspace_command); // XK_BackSpace
+extern DECLARE_CMD(se_delete_forward_command); // XK_Delete
+
 extern DECLARE_CMD(se_second_dispatch_command);
 extern DECLARE_CMD(se_universal_arg_command);
 extern DECLARE_CMD(se_editor_quit_command);
