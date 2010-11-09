@@ -50,6 +50,7 @@ struct se_key
 extern se_key se_key_null_init();
 extern char* se_key_to_string(se_key);
 extern se_key se_key_from_string( const char* rep );
+extern se_key se_key_from_keysym( KeySym keysym );
 extern se_key se_keycode_to_sekey(KeyCode);
 extern int se_key_is_control(se_key);
 extern int se_key_is_null(se_key);
@@ -91,6 +92,13 @@ struct se_key_seq
  */
 extern se_key_seq se_key_seq_null_init();
 extern se_key_seq se_key_seq_from_string( const char* );
+/**
+ * convenient constuctors 
+ */
+extern se_key_seq se_key_seq_from_keysym1( KeySym );
+extern se_key_seq se_key_seq_from_keysym2( KeySym keysyms[2] );
+extern se_key_seq se_key_seq_from_keysyms( int nr_keysym, ... );
+
 extern char* se_key_seq_to_string( se_key_seq );
 extern int se_key_seq_is_equal( se_key_seq, se_key_seq );
 

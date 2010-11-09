@@ -38,17 +38,18 @@ char* se_key_to_string(se_key key)
 
     if ( key.ascii == XK_Escape  )
         g_string_append_printf( gstr, "Esc" );
-    else if ( isprint(key.ascii) )
-        g_string_append_printf( gstr, "%c", key.ascii );        
-    else if ( (key.ascii != 0xffff) && (key.ascii != 0) )
-        g_string_append_printf( gstr, "\\x%x", key.ascii );
-    else
+    else if (key.ascii == 0 )
         g_string_printf( gstr, "(null)" );
+    else if ( BETWEEN(key.ascii, 0x20, 0x7e) )
+        g_string_append_printf( gstr, "%c", key.ascii );
+    else
+        g_string_append_printf( gstr, "%s", XKeysymToString(key.ascii) );
 
     return g_string_free( gstr, FALSE );
 }
 
-se_key se_key_from_string( const char* rep )
+
+se_key se_key_from_string2( const char* rep )
 {
     se_key key = se_key_null_init();
 
@@ -71,11 +72,12 @@ se_key se_key_from_string( const char* rep )
             return key;
             
         } else {
-            se_warn( "invalid rep of key: %s", rep );
+            KeySym sym = XStringToKeysym( rep );
+            if ( sym != NoSymbol )
+                key.ascii = sym;
+            else
+                se_warn( "invalid rep of key: %s", rep );
         }
-        
-        /* se_debug( "build key[0x%x]: %s", (gint)se_key_to_int(key), */
-        /*           se_key_to_string(key) ); */
         return key;
     }
     
@@ -83,7 +85,6 @@ se_key se_key_from_string( const char* rep )
         "C-", "S-", "M-", "H-", "B1-", "B2-", "B3-"
     };
     int nr_keywords = 6;
-    
     trie_t* trie = trie_init_with_keywords( keywords, nr_keywords );
 
     trie_match_result results[MAX_KEYWORDS];
@@ -108,7 +109,6 @@ se_key se_key_from_string( const char* rep )
     for (int i = 0; i < nr_match; ++i) {
         for (int j = 0; j < ARRAY_LEN(match_datas); ++j) {
             if ( strcmp(results[i].keyword, match_datas[j].prefix) == 0 ) {
-                /* se_debug( "catch %s", match_datas[j].prefix ); */
                 key.modifiers |= match_datas[j].modifier;
                 break;
             }
@@ -133,14 +133,119 @@ se_key se_key_from_string( const char* rep )
     return key;
 }
 
+se_key se_key_from_string( const char* rep )
+{
+    se_key key = se_key_null_init();
+
+    int rep_len = strlen(rep);
+    if ( rep_len <= 0 )
+        return key;
+    
+    char *last_prefix = strrchr( rep, '-');
+    if ( !last_prefix ) { // rep is not a combination key
+        if ( rep_len == 1 ) {
+            key.ascii = rep[0];
+            
+        } else if ( strcmp(rep, "Esc") == 0 ) {
+            key.ascii = XK_Escape;
+            
+        } else if ( strncmp(rep, "\\x", 2) == 0 ) {
+            key.ascii = strtol( rep+2, NULL, 16 );
+            
+        } else if ( strcmp(rep, "(null)") == 0 ) {
+            return key;
+            
+        } else {
+            KeySym sym = XStringToKeysym( rep );
+            if ( sym != NoSymbol )
+                key.ascii = sym;
+            else
+                se_warn( "invalid rep of key: %s", rep );
+        }
+        return key;
+        
+    } else if ( rep_len == 1 ) {
+        key.ascii = '-';
+        return key;
+    }
+
+    gboolean combined_key = FALSE;
+    char* keywords[] = {
+        "C-", "S-", "M-", "H-", "B1-", "B2-", "B3-"
+    };
+    int nr_keywords = 6;
+    trie_t* trie = trie_init_with_keywords( keywords, nr_keywords );
+
+    trie_match_result results[MAX_KEYWORDS];
+    int nr_match = trie_match_ex( trie, rep, ARRAY_LEN(results), results );
+    trie_free( trie );
+
+    if ( nr_match <= 0 ) {
+        se_warn( "rep (%s) is not a valid key", rep );
+        return key;
+    }
+
+    struct match_data {
+        const char* prefix;
+        int modifier;
+    } match_datas[] = {
+        {"C-", ControlDown},  {"M-", MetaDown},
+        {"S-", ShiftDown},    {"B1-", Button1Down},
+        {"B2-", Button2Down}, {"B3-", Button3Down},
+        {"H-", SuperDown }, 
+    };
+    
+    for (int i = 0; i < nr_match; ++i) {
+        for (int j = 0; j < ARRAY_LEN(match_datas); ++j) {
+            if ( strcmp(results[i].keyword, match_datas[j].prefix) == 0 ) {
+                key.modifiers |= match_datas[j].modifier;
+                combined_key = TRUE;
+                break;
+            }
+        }
+    }
+
+    // special case: [Modifiers]-<minus>
+    if ( last_prefix > rep && *(last_prefix-1) == '-' ) {
+        key.ascii = '-';
+        return key;
+    }
+    
+    ++last_prefix;
+    if ( *last_prefix == 0 ) {
+        return se_key_null_init();
+    }
+
+    if ( strlen(last_prefix) == 1 ) {
+        key.ascii = *last_prefix;
+    } else {
+        if ( strcmp(last_prefix, "Esc") == 0 ) {
+            key.ascii = XK_Escape;
+        } else {
+            KeySym sym = XStringToKeysym( rep );
+            if ( sym != NoSymbol )
+                key.ascii = sym;
+            else
+                se_warn( "invalid rep of key: %s", rep );
+        }
+    }
+
+    return key;
+}
+
+se_key se_key_from_keysym( KeySym keysym )
+{
+    return (se_key) { 0, keysym };
+}
+
 int se_key_is_control(se_key key)
 {
-    return ( (key.ascii == 0 || key.ascii == 0xffff) && key.modifiers > 0 );
+    return ( (key.ascii == 0) && key.modifiers > 0 );
 }
 
 int se_key_is_only(se_key key, unsigned short modifier)
 {
-    return ((key.ascii == 0 || key.ascii == 0xffff) && key.modifiers == modifier );
+    return ((key.ascii == 0) && key.modifiers == modifier );
 }
 
 se_key se_key_null_init()
@@ -150,7 +255,7 @@ se_key se_key_null_init()
 
 int se_key_is_null(se_key key)
 {
-    return (key.ascii == 0xffff || key.ascii == 0) && (key.modifiers == 0);
+    return (key.ascii == 0) && (key.modifiers == 0);
     
 }
 
@@ -165,6 +270,44 @@ se_key_seq se_key_seq_null_init()
 {
     se_key_seq keyseq;
     bzero( &keyseq, sizeof keyseq );
+    return keyseq;
+}
+
+se_key_seq se_key_seq_from_keysym1( KeySym keysym )
+{
+    return (se_key_seq) {
+        1,
+        {
+            {0, keysym}
+        }
+    };
+}
+
+se_key_seq se_key_seq_from_keysym2( KeySym keysyms[2] )
+{
+    return (se_key_seq) {
+        2,
+        {
+            {0, keysyms[0]},
+            {0, keysyms[1]}
+        }
+    };
+}
+
+se_key_seq se_key_seq_from_keysyms( int nr_keysym, ... )
+{
+    se_key_seq keyseq;
+    keyseq.len = nr_keysym;
+    
+    va_list ap;
+    va_start( ap, nr_keysym );
+    for (int i = 0; i < nr_keysym; ++i) {
+        KeySym sym = va_arg( ap, KeySym );
+        keyseq.keys[i] = se_key_from_keysym( sym );
+    }
+    va_end( ap );
+
+    /* se_debug( "%s", se_key_seq_to_string(keyseq) ); */
     return keyseq;
 }
 

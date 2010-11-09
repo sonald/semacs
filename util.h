@@ -79,5 +79,9 @@
             }                                   \
             is_in;                              \
         })
-#endif
+
+#define BETWEEN(mem, min, max)  ((mem >= (min)) && (mem <= (max)))
+#define BETWEEN_EX(mem, min, max)  ((mem > (min)) && (mem < (max)))
+
+#endif // ~end of file
 

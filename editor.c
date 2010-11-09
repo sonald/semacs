@@ -39,17 +39,17 @@ static int se_world_create_fundamentalMode(se_world* world)
     g_assert( !fundamentalMode );
     fundamentalMode = se_mode_create( gFundamentalModeName,
                                       se_world_init_fundamentalModeMap );
-    world->registerModemap( world, fundamentalModeMap );
+    world->registerMode( world, fundamentalMode );
     return TRUE;
 }
 
-void se_world_registerModemap(se_world* world, se_modemap* map)
+void se_world_registerMode(se_world* world, se_mode* mode)
 {
-    g_assert( world && map );
-    if ( !world->modemap_hash ) {
-        world->modemap_hash = g_hash_table_new( g_str_hash, g_str_equal );
+    g_assert( world && mode );
+    if ( !world->mode_hash ) {
+        world->mode_hash = g_hash_table_new( g_str_hash, g_str_equal );
     }
-    g_hash_table_insert( world->modemap_hash,
+    g_hash_table_insert( world->mode_hash,
                          strdup(gFundamentalModeName), fundamentalMode );
 }
 
@@ -57,23 +57,19 @@ static int se_world_init(se_world* world)
 {
     assert( world );
     assert( world->bufferList == NULL && world->current == NULL );
-
-    /* const char init_str[] = "this is by default created buffer just for demo"; */
-    /* if ( world->bufferCreate( world, "*scratch*" ) == TRUE ) { */
-    /*     assert( world->bufferList && world->current ); */
-    /*     world->current->insertString( world->current, init_str ); */
-    /* } */
-    
     se_world_create_fundamentalMode( world );
     g_assert( fundamentalMode );
-    
-    if ( world->bufferCreate(world, "*scratch*") == TRUE ) {
+
+    //FIXME: create two buffers
+    const char init_str[] = "# this is by default created buffer just for demo\n"
+        "you can test some Emacs keybindings here\n";
+    if ( world->bufferCreate( world, "*scratch*" ) == TRUE ) {
         assert( world->bufferList && world->current );
-        world->current->setFileName( world->current, "readme.txt" );
+        world->current->insertString( world->current, init_str );
         world->current->setMajorMode( world->current, gFundamentalModeName );
-        world->current->readFile( world->current );
     }
 
+    world->loadFile( world, "readme.txt" );
     return TRUE;
 }
 
@@ -88,15 +84,24 @@ static int se_world_finish(se_world* world)
                 return FALSE;
             }
         }
+        
+        world->bufferList = NULL;
     }
     
+    return TRUE;
+}
+
+static int se_world_quit(se_world* world)
+{
+    world->finish( world );
+    exit(0);
     return TRUE;
 }
 
 se_mode* se_world_getMajorMode(se_world* world, const char* mode_name)
 {
     g_assert( world && mode_name );
-    return (se_mode*) g_hash_table_lookup( world->modemap_hash, mode_name );
+    return (se_mode*) g_hash_table_lookup( world->mode_hash, mode_name );
 }
 
 static int se_world_saveFile(se_world* world, const char* file_name)
@@ -110,7 +115,7 @@ static int se_world_loadFile(se_world* world, const char* file_name)
     //TODO: check if file_name has been loaded by a buffer
     size_t siz = strlen( file_name );
     char buf[siz+1];
-    strncpy( buf, file_name, siz );
+    memcpy( buf, file_name, siz+1 );
     char *buf_name = basename( buf );
     if ( strlen(buf_name) >= SE_MAX_BUF_NAME_SIZE ) {
         buf_name[SE_MAX_BUF_NAME_SIZE] = '\0';
@@ -120,11 +125,12 @@ static int se_world_loadFile(se_world* world, const char* file_name)
         se_error( "failed to load file" );
         return FALSE;
     }
-
+    
     se_buffer* bufp = world->current;
     assert( bufp );
     bufp->setFileName( bufp, file_name );
-    return TRUE;
+    bufp->setMajorMode( world->current, gFundamentalModeName );
+    return bufp->readFile( bufp );
 }
 
 static int se_world_bufferCreate(se_world* world, const char* buf_name)
@@ -148,7 +154,20 @@ static int se_world_bufferClear(se_world* world, const char* buf_name)
 
 static int se_world_bufferDelete(se_world* world, const char* buf_name)
 {
-    return 0;
+    se_buffer *bufp = world->bufferList;
+    while ( bufp ) {
+        if ( strcmp(bufp->getBufferName(bufp), buf_name) == 0 ) {
+            if ( bufp == world->current )
+                world->current = bufp->nextBuffer;
+            bufp->release( bufp );
+            g_free( bufp );
+            return TRUE;
+        }
+
+        bufp = bufp->nextBuffer;
+    }
+    
+    return FALSE;
 }
 
 static int se_world_bufferSetCurrent(se_world* world, const char* buf_name)
@@ -167,9 +186,38 @@ static int se_world_bufferSetCurrent(se_world* world, const char* buf_name)
     return FALSE;
 }
 
-static char* se_world_bufferSetNext(se_world* world)
+static const char* se_world_bufferSetPrevious(se_world* world)
 {
-    return 0;    
+    g_assert( world );
+    if ( world->bufferList == NULL )
+        return NULL;
+    
+    se_buffer *bufp = world->bufferList;
+    while ( bufp->nextBuffer ) {
+        if ( bufp->nextBuffer == world->current ){
+            world->current = bufp;
+            return bufp->getBufferName( bufp );
+        }
+        bufp = bufp->nextBuffer;
+    }
+    if ( world->current == world->bufferList ) {
+        world->current = bufp;
+    }
+    return world->current->getBufferName( world->current );
+}
+
+static const char* se_world_bufferSetNext(se_world* world)
+{
+    g_assert( world );
+    if ( world->bufferList == NULL )
+        return NULL;
+    
+    if ( world->current->nextBuffer == NULL ) { // loop back to first
+        world->current = world->bufferList;
+    } else
+        world->current = world->current->nextBuffer;
+    
+    return world->current->getBufferName( world->current );
 }
 
 static int se_world_bufferChangeName(se_world* world, const char* buf_name)
@@ -189,10 +237,20 @@ static int se_world_dispatchCommand(se_world* world, se_command_args* args, se_k
     se_modemap *map = bufp->majorMode->modemap;
     g_assert( map );
 
-    se_key_command_t cmd = se_modemap_lookup_command( map, key );
+    se_key_seq keyseq = se_key_seq_null_init();
+    if ( args->flags & SE_PREFIX_ARG )
+        keyseq = args->keyseq;
+    keyseq.keys[keyseq.len++] = key;
+
+    se_debug( "search keybinding for %s", se_key_seq_to_string(keyseq) );
+    se_key_command_t cmd = se_modemap_lookup_command_ex( map, keyseq );
     if ( !cmd ) {
-        se_warn( "key[%s] is not map", se_key_to_string(key) );
+        se_msg( "key seq [%s] is not binded", se_key_seq_to_string(keyseq) );
         return TRUE;
+    }
+
+    if ( cmd == se_second_dispatch_command ) {
+        se_debug( "call second dispatch" );
     }
     
     return cmd( bufp->world, args, key);
@@ -204,6 +262,8 @@ se_world* se_world_create()
 
     world->init = se_world_init;
     world->finish = se_world_finish;
+    world->quit = se_world_quit;
+    
     world->saveFile = se_world_saveFile;
     world->loadFile = se_world_loadFile;
     world->bufferCreate = se_world_bufferCreate;
@@ -211,11 +271,13 @@ se_world* se_world_create()
     world->bufferDelete = se_world_bufferDelete;
     world->bufferSetCurrent = se_world_bufferSetCurrent;
     world->bufferSetNext = se_world_bufferSetNext;
+    world->bufferSetPrevious = se_world_bufferSetPrevious;
+    
     world->bufferChangeName = se_world_bufferChangeName;
     world->bufferGetName = se_world_bufferGetName;
 
     world->getMajorMode = se_world_getMajorMode;
-    world->registerModemap = se_world_registerModemap;
+    world->registerMode = se_world_registerMode;
     
     world->dispatchCommand = se_world_dispatchCommand;
     

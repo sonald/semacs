@@ -59,7 +59,7 @@ int se_line_getLineLength( se_line* lp )
  * address.  caller should make sure that data contains no '\n' at all if lp is
  * already nl ended.
  */
-static se_line* se_line_insert(se_line* lp, int start, char* data, int len)
+static se_line* se_line_insert(se_line* lp, int start, const char* data, int len)
 {
     g_assert( lp && lp->content );
 
@@ -82,7 +82,7 @@ static se_line* se_line_insert(se_line* lp, int start, char* data, int len)
     } 
 
     chunk = lp->content;
-    memmove( chunk->data+start, chunk->data+start+len, len );
+    memmove( chunk->data+start+len, chunk->data+start, new_len-start-len );
     memcpy( chunk->data+start, data, len );
     chunk->used += len;
     chunk->size = new_len;
@@ -109,7 +109,7 @@ static se_line* se_line_clear(se_line* lp)
  * just return original lp for sequencial call
  * note that one can not delete trialing '\n' in a line
  */
-SE_UNUSED static se_line* se_line_delete(se_line* lp, int start, int len)
+static se_line* se_line_delete(se_line* lp, int start, int len)
 {
     g_assert( lp );
     int used = lp->content->used;
@@ -160,6 +160,8 @@ static se_line* se_line_alloc(const char* data, int len)
     lp->content->size = new_len;
     lp->content->used = len;
     lp->content->fullLine = (data[len-1] == '\n');
+    if ( lp->content->fullLine )
+        se_debug( "nl ended line" );
     memcpy( lp->content->data, data, len );
     return lp;
 }
@@ -179,66 +181,19 @@ struct se_mark
 
 /**
  * use this is sync with optional members( curLine )
- * 
+ * if count is positive, move forward, else move backward
  */
-/* static void se_buffer_update_point(se_buffer* bufp, int incr) */
-/* { */
-/*     se_debug( "B:incr:%d, point:%d, curLine: %d, col: %d", incr, */
-/*               bufp->position, bufp->curLine, bufp->curColumn ); */
-/*     g_assert( bufp && bufp->lines ); */
-/*     bufp->position += incr; */
-
-/*     if ( bufp->position == bufp->charCount ) { */
-/*         se_line *last_line = bufp->lines->previous; */
-/*         bufp->curLine = bufp->lineCount-1; */
-/*         bufp->curColumn = se_line_getLineLength( last_line ); */
-/*         if ( last_line->content->fullLine ) { */
-/*             bufp->curLine++; */
-/*             bufp->curColumn = 0; */
-/*         } */
-/*         se_debug( "A:point:%d, curLine: %d, col: %d", bufp->position, bufp->curLine, */
-/*                   bufp->curColumn ); */
-/*         return; */
-/*     } */
-    
-/*     se_line *lp = bufp->lines; */
-/*     int total = 0, n = -1; */
-
-/*     do { */
-/*         if ( lp->content->fullLine ) */
-/*             n++; */
-/*         total += se_line_getLineLength(lp); */
-/*         if ( bufp->position < total ) { */
-/*             total -= se_line_getLineLength(lp);             */
-/*             break; */
-/*         } else if ( bufp->position == total ) { */
-/*             if ( lp->content->fullLine ) { */
-/*                 n++; */
-/*             } else */
-/*                 total -= se_line_getLineLength(lp);             */
-/*             break; */
-/*         } */
-        
-/*         lp = lp->next; */
-/*     } while (1); */
-
-/*     bufp->curLine = n; */
-/*     bufp->curColumn = bufp->position - total; */
-    
-/*     se_debug( "A:point:%d, curLine: %d, col: %d", bufp->position, bufp->curLine, */
-/*               bufp->curColumn ); */
-/* } */
-
-#define BETWEEN(mem, min, max)  ((mem >= (min)) && (mem <= (max)))
-#define BETWEEN_EX(mem, min, max)  ((mem > (min)) && (mem < (max)))
-
 static void se_buffer_update_point(se_buffer* bufp, int incr)
 {
-    se_debug( "B:incr:%d, point:%d, lines: %d,curLine: %d, col: %d", incr,
-              bufp->position, bufp->lineCount, bufp->curLine, bufp->curColumn );
+    se_debug( "B:incr:%d, point:%d, chars:%d, lines: %d,curLine: %d, col: %d", incr,
+              bufp->position, bufp->charCount, bufp->lineCount, bufp->curLine, bufp->curColumn );
     g_assert( bufp && bufp->lines );
+    
     bufp->position += incr;
-
+    if ( bufp->position > bufp->charCount )
+        bufp->position = bufp->charCount;
+    bufp->position =  bufp->position? :0;
+    
     se_line *lp = bufp->lines;
     int total = 0, n = 0;
     while (1) {
@@ -256,8 +211,8 @@ static void se_buffer_update_point(se_buffer* bufp, int incr)
         }
         lp = lp->next;
     }
-    se_debug( "A:incr:%d, point:%d, lines: %d,curLine: %d, col: %d", incr,
-              bufp->position, bufp->lineCount, bufp->curLine, bufp->curColumn );
+    se_debug( "A:incr:%d, point:%d, chars:%d, lines: %d,curLine: %d, col: %d", incr,
+              bufp->position, bufp->charCount, bufp->lineCount, bufp->curLine, bufp->curColumn );
 }
 
 /**
@@ -275,14 +230,22 @@ static gboolean se_buffer_eol(se_buffer* bufp)
 }
 
 // Beginning-Of-Line
-SE_UNUSED static gboolean se_buffer_bol(se_buffer* bufp)
+static gboolean se_buffer_bol(se_buffer* bufp)
 {
     g_assert( bufp );
-    se_line *lp = bufp->getCurrentLine( bufp );
-    if ( !lp )
-        return TRUE;
-
     return bufp->curColumn == 0;
+}
+
+static gboolean se_buffer_bob(se_buffer* bufp)
+{
+    g_assert( bufp );
+    return ( bufp->position == 0 || bufp->charCount == 0 );
+}
+
+static gboolean se_buffer_eob(se_buffer* bufp)
+{
+    g_assert( bufp );
+    return (bufp->position == bufp->charCount);
 }
 
 /**
@@ -326,7 +289,8 @@ int se_buffer_init(se_buffer* bufp)
 
 int se_buffer_release(se_buffer* bufp)
 {
-    return 0;
+    
+    return TRUE;
 }
 
 int se_buffer_isModified(se_buffer* bufp)
@@ -396,7 +360,7 @@ static se_line* se_buffer_getCurrentLine(se_buffer* bufp)
     se_debug( "point: %d, charCount: %d", bufp->position, bufp->charCount );
         
     se_line *lp = bufp->lines;
-    if ( bufp->position == bufp->charCount && bufp->curColumn == 0 ) {
+    if ( se_buffer_eob( bufp ) && se_buffer_bol( bufp ) ) {
         // end of buffer
         se_debug( "EOB" );
         return NULL;
@@ -411,81 +375,164 @@ static se_line* se_buffer_getCurrentLine(se_buffer* bufp)
 
 int se_buffer_forwardChar(se_buffer* bufp, int count)
 {
-    return 0;
+    se_debug( "" );
+    if ( count )
+        se_buffer_update_point( bufp, count );
+    return TRUE;
 }
 
-int se_buffer_forwardLine(se_buffer* bufp, int count)
+/**
+ * when moving up/down, try best to keep column remaining
+ */
+int se_buffer_forwardLine(se_buffer* bufp, int nr_lines)
 {
-    return 0;
+    se_debug( "forward %d lines", nr_lines );
+    g_assert( bufp && bufp->lines );
+    int orig_col = bufp->curColumn;
+
+    if ( nr_lines > 0 && (nr_lines + bufp->curLine > bufp->lineCount) )
+        nr_lines = bufp->lineCount - bufp->curLine;
+    else if ( nr_lines < 0 && (bufp->curLine + nr_lines <= 0) )
+        nr_lines = - MIN(bufp->curLine, bufp->lineCount);
+    
+    if ( !nr_lines || (nr_lines > 0 && bufp->curLine == bufp->lineCount)
+         || (nr_lines < 0 && bufp->curLine == 0))
+        return TRUE;
+
+    se_line *lp = bufp->getCurrentLine( bufp );
+    int count = 0;
+
+    if ( nr_lines > 0 ) {
+        if ( !lp ) {  // EOB
+            return TRUE;
+        }
+
+        count = se_line_getLineLength(lp) - orig_col;
+        for (int i = 0; i < nr_lines-1; ++i) {
+            g_assert( lp->next == bufp->lines );
+            lp = lp->next;
+            count += se_line_getLineLength( lp );            
+        }
+
+        if ( lp->next != bufp->lines ) {
+            lp = lp->next;
+            gboolean nl_ended = lp->content->fullLine;
+            count += MIN(orig_col, se_line_getLineLength(lp) - (nl_ended?1:0));
+        }
+        
+    } else {
+        count = lp? orig_col: 0;
+        lp = lp? : bufp->lines;
+        for (int i = nr_lines; i < -1; ++i) {
+            lp = lp->previous;
+            count += se_line_getLineLength( lp );            
+        }
+
+        lp = lp->previous;
+        count += MAX(0, se_line_getLineLength(lp) - orig_col);
+    }
+    
+    se_buffer_update_point( bufp, nr_lines>0?count:-count );
+    return TRUE;    
 }
 
-int se_buffer_bufferStart(se_buffer* bufp)
+static int se_buffer_beginingOfLine(se_buffer* bufp)
 {
-    return 0;
+    g_assert( bufp );
+    if ( !bufp->lines || se_buffer_bob(bufp) || se_buffer_bol(bufp) )
+        return TRUE;
+
+    int orig_col = bufp->curColumn;
+    if ( orig_col == 0 )
+        return TRUE;
+
+    se_buffer_update_point( bufp, -orig_col );
+    g_assert( bufp->curColumn == 0 );
+    
+    return TRUE;
 }
 
-int se_buffer_bufferEnd(se_buffer* bufp)
+static int se_buffer_endOfLine(se_buffer* bufp)
+{
+    if ( !bufp->lines || se_buffer_eob(bufp) || se_buffer_eol(bufp) )
+        return TRUE;
+
+    se_line *lp = bufp->getCurrentLine( bufp );
+    gboolean nl_ended = lp->content->fullLine;
+    int trail = se_line_getLineLength(lp) - bufp->curColumn - (nl_ended?1:0);
+    se_buffer_update_point( bufp, trail );
+    g_assert( bufp->curColumn == se_line_getLineLength(lp) - (nl_ended?1:0) );
+    
+    return TRUE;
+}
+
+static int se_buffer_bufferStart(se_buffer* bufp)
+{
+    return TRUE;
+}
+
+static int se_buffer_bufferEnd(se_buffer* bufp)
 {
     return bufp->charCount;
 }
 
-int se_buffer_createMark(se_buffer* bufp, const char* name, int flags)
+static int se_buffer_createMark(se_buffer* bufp, const char* name, int flags)
 {
     return 0;
 }
 
-void se_buffer_deleteMark(se_buffer* bufp, const char* name)
+static void se_buffer_deleteMark(se_buffer* bufp, const char* name)
 {
 
 }
 
-int se_buffer_markToPoint(se_buffer* bufp, const char* name)
-{
-    return 0;
-}
-
-int se_buffer_pointToMark(se_buffer* bufp, const char* name)
+static int se_buffer_markToPoint(se_buffer* bufp, const char* name)
 {
     return 0;
 }
 
-int se_buffer_getMark(se_buffer* bufp, const char* name)
+static int se_buffer_pointToMark(se_buffer* bufp, const char* name)
 {
     return 0;
 }
 
-int se_buffer_setMark(se_buffer* bufp, const char* name, int pos)
+static int se_buffer_getMark(se_buffer* bufp, const char* name)
 {
     return 0;
 }
 
-int se_buffer_pointAtMark(se_buffer* bufp, const char* name)
+static int se_buffer_setMark(se_buffer* bufp, const char* name, int pos)
 {
     return 0;
 }
 
-int se_buffer_pointBeforeMark(se_buffer* bufp, const char* name)
+static int se_buffer_pointAtMark(se_buffer* bufp, const char* name)
+{
+    return 0;
+}
+
+static int se_buffer_pointBeforeMark(se_buffer* bufp, const char* name)
 {
 
     return 0;
 }
 
-int se_buffer_pointAfterMark(se_buffer* bufp, const char* name)
+static int se_buffer_pointAfterMark(se_buffer* bufp, const char* name)
 {
     return 0;
 }
 
-int se_buffer_swapPointAndMark(se_buffer* bufp, const char* name)
+static int se_buffer_swapPointAndMark(se_buffer* bufp, const char* name)
 {
     return 0;
 }
 
-int se_buffer_writeBack(se_buffer* bufp)
+static int se_buffer_writeBack(se_buffer* bufp)
 {
     return 0;
 }
 
-void se_buffer_setFileName(se_buffer* bufp, const char* file_name)
+static void se_buffer_setFileName(se_buffer* bufp, const char* file_name)
 {
     //TODO: check
     if ( bufp->fileName[0] ) {
@@ -686,7 +733,8 @@ void se_buffer_insertChar(se_buffer* bufp, int c)
     } else if ( c == '\n' ) { // split cur line into 2 lines
         gboolean nl_ended = lp->content->fullLine;
         
-        if ( col == 0 ) {
+//        if ( col == 0 ) {
+        if ( se_buffer_bol(bufp) ) {        
             se_line *lp_new = se_line_alloc( buf, 1 );
             if ( bufp->curLine == 0 ) {
                 bufp->lines = lp_new;
@@ -728,54 +776,92 @@ void se_buffer_insertChar(se_buffer* bufp, int c)
  * TODO: 
  *   auto split long lines into small ( auto wrap or what )
  */
-/* FIXME: insert is acutally happens right after pointer, so this could involve
- * cutting cur line into two sep lines.
- */
-void se_buffer_insertString(se_buffer* bufp, char* str)
+void se_buffer_insertString(se_buffer* bufp, const char* str)
 {
-    char *sp = str, *buf = str;
-    size_t buf_len = 0;
-    int line_incr = 0, char_incr = 0;
+    const char* sp = str;
+    int str_len = strlen( str );
+    
+    do {
+        const char* endp = strchr( sp, '\n' );
+        if ( !endp && (sp - str >= str_len) )
+            break;
 
-    while ( *buf ) {
-        sp = strchr( buf, '\n' );
-        se_line *lp = NULL;
-        
-        if ( !sp ) {
-            buf_len = strlen( buf );
-            lp = se_line_alloc( buf, buf_len );
-            char_incr += buf_len;
+        int buf_len = 0;
+        gboolean nl_ended = TRUE;
+        if ( endp ) {
+            buf_len = ++endp - sp; // take '\n' into account
             
-        } else {
-            buf_len = sp - buf;
-            lp = se_line_alloc( buf, buf_len );
-            ++line_incr;
-            char_incr += buf_len + 1; // plus 1 is for invisible '\n'
-        }
-        
-        if ( bufp->lines ) {
-            se_line *lp1 = bufp->lines->previous;
-            lp1->next = lp;
-            lp->next = bufp->lines;
-            lp->previous = lp1;
-            bufp->lines->previous = lp;
-            
-        } else {
-            bufp->lines = lp;
-            lp->next = lp;
-            lp->previous = lp;
+        } else if ( sp - str < str_len ) {
+            // means this is last line and no trailing '\n'
+            buf_len = sp - str;
+            endp = str + 1;
+            nl_ended = FALSE;
         }
 
-        if ( !sp )
+        se_debug("process: sp - str: %d, sp(%d): [%s], nl_ended: %d",
+                 (sp - str), buf_len, strndup(sp, buf_len), nl_ended );
+        
+        se_line *cur_lp = bufp->getCurrentLine( bufp );
+        if ( !cur_lp ) {
+            se_debug("1st switch");
+            // eob and bol
+            se_line *lp_new = se_line_alloc( sp, buf_len );
+            if ( bufp->lines ) {
+                cur_lp = bufp->lines->previous;
+                se_buffer_insert_line_after( bufp, cur_lp, lp_new );
+            } else {
+                bufp->lines = lp_new;
+                lp_new->next = lp_new;
+                lp_new->previous = lp_new;
+            }
+            
+            // a little fix, whatever if sp is nl-ended, we should increment lines
+            if ( !nl_ended ) bufp->lineCount++;
+            
+        } else if ( nl_ended ) {
+            se_debug("2nd switch");
+            
+            if ( se_buffer_bol(bufp) ) {
+                se_line *lp_new = se_line_alloc( sp, buf_len );
+                se_buffer_insert_line_after( bufp, cur_lp->previous, lp_new );
+                if ( bufp->lines == cur_lp ) {
+                    bufp->lines = lp_new;
+                }
+
+            } else {
+                gboolean nl_ended2 = cur_lp->content->fullLine;
+                int lp_len = se_line_getLineLength(cur_lp);
+                
+                if ( se_buffer_eol(bufp) && !nl_ended2 ) {
+                    g_assert( bufp->curLine == bufp->lineCount - 1 );
+                    se_line_insert( cur_lp, lp_len, sp, buf_len );
+                    
+                } else {
+                    const char *orig = se_line_getData( cur_lp );
+                    int col = bufp->curColumn;
+                    
+                    se_line *lp_new = se_line_alloc( orig+col, lp_len - col );
+                    se_line_delete( cur_lp, col, lp_len );
+                    se_line_insert( cur_lp, col, sp, buf_len );
+                    se_buffer_insert_line_after( bufp, cur_lp, lp_new ); 
+                }
+            }
+
+        } else {
+            se_debug("3rd switch");
+            int lp_len = se_line_getLineLength(cur_lp);
+            se_line_insert( cur_lp, lp_len, sp, buf_len );
+        }
+        
+        if ( nl_ended ) bufp->lineCount++;
+        bufp->charCount += buf_len;
+        se_buffer_update_point( bufp, buf_len );
+
+        sp = endp;
+        if ( sp - str >= str_len )
             break;
         
-        buf = sp+1;
-    }
-
-    bufp->lineCount += line_incr;
-    bufp->charCount += char_incr;    
-
-    se_buffer_update_point( bufp, char_incr );
+    } while (1);
 
     bufp->modified = TRUE;
 }
@@ -827,8 +913,12 @@ se_buffer* se_buffer_create(se_world* world, const char* buf_name)
     
     bufp->forwardChar = se_buffer_forwardChar;
     bufp->forwardLine = se_buffer_forwardLine;
+    bufp->beginingOfLine = se_buffer_beginingOfLine;
+    bufp->endOfLine = se_buffer_endOfLine;
     bufp->bufferStart = se_buffer_bufferStart;
     bufp->bufferEnd = se_buffer_bufferEnd;
+
+    
     bufp->createMark = se_buffer_createMark;
     bufp->deleteMark = se_buffer_deleteMark;
     bufp->markToPoint = se_buffer_markToPoint;

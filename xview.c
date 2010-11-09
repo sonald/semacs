@@ -139,11 +139,10 @@ static void se_text_viewer_repaint( se_text_viewer* viewer )
         int cols = se_line_getLineLength( lp );
         if ( buf[cols-1] == '\n' ) cols--;
         memcpy( (viewer->content + r*SE_MAX_ROWS), buf, cols );
+        *(viewer->content + r*SE_MAX_ROWS+cols) = '\0';
         /* se_debug( "draw No.%d: [%s]", r, buf ); */
         lp = lp->next;
     }
-
-    
 }
 
 static void se_text_viewer_redisplay(se_text_viewer* viewer )
@@ -229,20 +228,20 @@ static se_key se_key_event_process( Display *display, XKeyEvent kev )
     if ( key_sym == NoSymbol ) {
         se_debug( "NoSymbol for keycode %d", kev.keycode );
     }
-    se_debug( "keysym: %s", XKeysymToString(key_sym) );
+
     se_key sekey = se_key_null_init();
-    
     char *key_str = XKeysymToString( key_sym );
 
     // FIXME: this is a simplified version, since KeySym actually follow latin-1
     // except for some terminal control keys
-    sekey.ascii = key_sym;
-    if ( strlen(key_str) > 1 ) {
-        se_debug( "sekey: %s", se_key_to_string(sekey) );        
+    if ( g_str_has_prefix(key_str, "Alt")
+         || g_str_has_prefix(key_str, "Meta")
+         || g_str_has_prefix(key_str, "Super")
+         || g_str_has_prefix(key_str, "Control")
+         || g_str_has_prefix(key_str, "Shift") ) {
         return sekey;
     }
-    
-    /* sekey.ascii = key_str[0]; */
+    sekey.ascii = key_sym;
     
     if ( kev.state & ControlMask ) {
         sekey.modifiers |= ControlDown;
@@ -264,7 +263,7 @@ static se_key se_key_event_process( Display *display, XKeyEvent kev )
         sekey.modifiers = 0;
     }
     
-    se_debug( "sekey: %s", se_key_to_string(sekey) );
+    se_debug( "sekey(%s): %s", key_str, se_key_to_string(sekey) );
     return sekey;
 }
 
@@ -273,11 +272,11 @@ static se_key se_delayed_wait_key(se_text_viewer* viewer)
     se_debug( "waiting for a key..." );    
     XEvent ev;
     while ( XCheckWindowEvent( viewer->env->display, viewer->view,
-                               KeyPressMask | KeyReleaseMask, &ev ) == False ) {
+                               KeyPressMask, &ev ) == False ) {
         usleep( 100 );
     }
 
-    g_assert( ev.type == KeyRelease || ev.type == KeyPress );
+    /* g_assert( ev.type == KeyPress ); */
     se_debug( "wait for a key done" );
     return se_key_event_process( viewer->env->display, ev.xkey );
 }

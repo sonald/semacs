@@ -31,12 +31,13 @@ struct se_world
     se_buffer *bufferList;
     se_buffer *current;
 
-    // mode map name <-> mode map obj
-    se_modemap_hash *modemap_hash;
+    // mode name <-> mode obj
+    se_mode_hash *mode_hash;
     
     int (*init)(se_world*);
     int (*finish)(se_world*);
-
+    int (*quit)(se_world*); // quit editor
+    
     int (*saveFile)(se_world*, const char*);
     int (*loadFile)(se_world*, const char*);
 
@@ -44,13 +45,14 @@ struct se_world
     int (*bufferClear)(se_world*, const char* buf_name);
     int (*bufferDelete)(se_world*, const char* buf_name);
     int (*bufferSetCurrent)(se_world*, const char* buf_name);
-    char* (*bufferSetNext)(se_world*); // return next bufffer's name
+    const char* (*bufferSetNext)(se_world*); // return next buffer's name
+    const char* (*bufferSetPrevious)(se_world*); // return previous buffer's name    
     int (*bufferChangeName)(se_world*, const char* buf_name);
     char* (*bufferGetName)(se_world*);
 
     se_mode* (*getMajorMode)(se_world*, const char* mode_name);
-
-    void (*registerModemap)(se_world*, se_modemap*);
+    
+    void (*registerMode)(se_world*, se_mode*);
     
     int (*dispatchCommand)(se_world*, se_command_args*, se_key);
 };

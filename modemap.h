@@ -62,9 +62,6 @@ extern int se_modemap_keybinding_exists(se_modemap*, se_key_seq);
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// struct to cached all created modemap 
-typedef GHashTable se_modemap_hash;
-
 DEF_CLS(se_mode);
 struct se_mode
 {
@@ -77,6 +74,8 @@ struct se_mode
     se_modemap* (*initMap)(se_mode*);
     int (*init)(se_mode*); // setup mode such as keybindings
 };
+
+typedef GHashTable se_mode_hash;
 
 extern se_mode* se_mode_create(const char* mode_name,
                                se_modemap* (*initMapProc)());

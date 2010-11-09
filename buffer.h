@@ -91,7 +91,9 @@ struct se_buffer
     
     int (*forwardChar)(se_buffer*, int);
     int (*forwardLine)(se_buffer*, int);
-
+    int (*beginingOfLine)(se_buffer*);
+    int (*endOfLine)(se_buffer*);
+    
     // affects by narrowing, right now don't consider that
     int (*bufferStart)(se_buffer*);
     int (*bufferEnd)(se_buffer*);
@@ -128,7 +130,7 @@ struct se_buffer
     
     void (*insertChar)(se_buffer*, int c);
     void (*replaceChar)(se_buffer*, int c);
-    void (*insertString)(se_buffer*, char*);
+    void (*insertString)(se_buffer*, const char*);
     void (*replaceString)(se_buffer*, const char*);
     int (*deleteChars)(se_buffer*, int count);
     // delete region between point and mark

@@ -10,14 +10,14 @@ void test_glib_funcs()
     gchar** lines = g_strsplit_set( "\n\taaa\n\nbbb\ncc\n", "\n\t", -1 );
     gchar** linep = lines;    
     while ( *linep ) {
-        se_debug( "cur: [%s]", *linep );
+        /* se_debug( "cur: [%s]", *linep ); */
         ++linep;
     }
     g_strfreev( lines );
     
 }
 
-void test_keys()
+void test_key_constructors()
 {
     se_key key = se_key_from_string( "C-M-S-H-x" );
     g_assert( se_key_to_int(key) == 0x78000f );
@@ -39,7 +39,7 @@ void test_keys()
 
     {
         
-        for (int i = 1; i < 128; ++i) {
+        for (int i = 0x20; i <= 0x7e; ++i) {
             se_key k1 = {0, i};
 
             char s[2];
@@ -52,9 +52,19 @@ void test_keys()
             /* se_debug( "%d. key: %s", i, se_key_to_string(k1) ); */
         }
     }
+
+    g_assert( se_key_is_equal(se_key_from_string("BackSpace"),
+                              se_key_from_string("\\xff08")) );
+    g_assert( se_key_is_equal(se_key_from_string("Tab"),
+                              se_key_from_string("\\xff09")) );
+    g_assert( se_key_is_equal(se_key_from_string("Delete"),
+                              se_key_from_string("\\xffff")) );
+
+    g_assert( strcmp(se_key_to_string(se_key_from_string("C--")), "C--") == 0 );
+    g_assert( strcmp(se_key_to_string(se_key_from_string("C-M--")), "C-M--") == 0 );    
 }
 
-void test_keys2()
+void test_keyseq_constructors()
 {
 
     {
@@ -69,17 +79,12 @@ void test_keys2()
 
         g_assert( ks2.len == 1 );
         se_key k = ks2.keys[0];
-        g_test_message( "k: 0x%x", se_key_to_int(k) );
-
         k = keyseq.keys[0];
-        g_test_message( "k: 0x%x", se_key_to_int(k) );
-    
         g_assert( se_key_seq_is_equal(keyseq, ks2) );
     }
 
     {
-        
-        for (int i = 1; i < 128; ++i) {
+        for (int i = 0x20; i < 0x7e; ++i) {
             se_key_command_t cmd = se_self_silent_command;
             if ( isprint(i) ) {
                 cmd = se_self_insert_command;
@@ -97,6 +102,22 @@ void test_keys2()
             /* se_debug( "%d. keyseq: %s", i, se_key_seq_to_string(ks2) ); */
         }
     }
+}
+
+void test_keyseq_constructors2()
+{
+    g_assert( strcmp(se_key_to_string(se_key_from_keysym(XK_BackSpace)),
+                     "BackSpace") == 0 );
+    g_assert( strcmp(se_key_seq_to_string(se_key_seq_from_keysym1(XK_BackSpace)),
+                         "BackSpace") == 0 );
+    g_assert(
+        strcmp(se_key_seq_to_string(se_key_seq_from_keysym2((KeySym[2]){ XK_BackSpace, XK_Tab})),
+               "BackSpace Tab") == 0 );
+    g_assert(
+        strcmp(se_key_seq_to_string(se_key_seq_from_keysyms(3, XK_BackSpace, XK_Tab, XK_0)),
+               "BackSpace Tab 0") == 0 );
+
+
 }
 
 void test_modemap1()
@@ -166,15 +187,21 @@ void test_modemap4()
     se_modemap *map = se_modemap_full_create( "testMap" );
     g_assert( map );
 
-    for (int i = 1; i < 128; ++i) {
+    for (int i = 0x20; i <= 0x7e; ++i) {
         char ks[2] = "";
         ks[0] = i;
         /* se_debug( "testing for %c(0x%x)", i, i ); */
         g_assert( se_modemap_keybinding_exists_str(map, ks) );
     }
+
     
     se_key_command_t cmd1 = se_modemap_lookup_command(map, se_key_from_string("C-x"));
     g_assert( cmd1 == se_second_dispatch_command );
+
+    cmd1 = se_modemap_lookup_command_ex(map, se_key_seq_from_string("C-="));
+    g_assert( cmd1 == se_next_buffer_command );
+    cmd1 = se_modemap_lookup_command_ex(map, se_key_seq_from_string("C--"));
+    g_assert( cmd1 == se_previous_buffer_command );
     
     cmd1 = se_modemap_lookup_command(map, se_key_from_string("C-g"));
     g_assert( cmd1 == se_kbd_quit_command );
@@ -201,8 +228,9 @@ int main(int argc, char *argv[])
     g_test_init( &argc, &argv, NULL );
 
     g_test_add_func( "/semacs/glib", test_glib_funcs );
-    g_test_add_func( "/semacs/keys/1",  test_keys );
-    g_test_add_func( "/semacs/keys/2",  test_keys2 );    
+    g_test_add_func( "/semacs/keys/cntr",  test_key_constructors );
+    g_test_add_func( "/semacs/keyseqs/cntr",  test_keyseq_constructors );
+    g_test_add_func( "/semacs/keyseqs/cntr2",  test_keyseq_constructors2 );    
     g_test_add_func( "/semacs/modemap/simple/1", test_modemap1 );
     g_test_add_func( "/semacs/modemap/simple/2", test_modemap2 );
     g_test_add_func( "/semacs/modemap/simple/rebinding", test_modemap3 );
