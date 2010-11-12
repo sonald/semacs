@@ -32,8 +32,11 @@ DEFINE_CMD(se_self_silent_command)
 
 DEFINE_CMD(se_self_insert_command)
 {
-    // g_assert( isprint(key.ascii) ); // can not assert, cause any key can bind to this cmd
-    world->current->insertChar( world->current, key.ascii );
+    if ( args->flags & SE_IM_ARG ) {
+        world->current->insertString( world->current, args->composedStr->str );
+    } else {
+        world->current->insertChar( world->current, key.ascii );
+    }
     return TRUE;
 }
 

@@ -24,6 +24,15 @@
 #include "util.h"
 #include "editor.h"
 
+DEF_CLS(se_font);
+struct se_font
+{
+    XftFont *xftFont;
+    int glyphMaxHeight;
+    int glyphMaxWidth;
+    int glyphAscent;
+};
+
 DEF_CLS(se_env);  // environment 
 struct se_env 
 {
@@ -34,11 +43,16 @@ struct se_env
     Visual *visual;
     Window root;
 
+    se_font monoFont;
+    se_font sansFont;
+    se_font serifFont;
+    
     XftFont *xftFont;
     int glyphMaxHeight;
     int glyphMaxWidth;
     int glyphAscent;
 
+    XIM xim;
     se_world *world;
     
     gboolean exitLoop;

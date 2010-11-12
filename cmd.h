@@ -24,9 +24,10 @@
 #include "key.h"
 
 enum {
-    SE_UNIVERSAL_ARG,
-    SE_EXIT_ARG,
-    SE_PREFIX_ARG,  
+    SE_UNIVERSAL_ARG = 0x01,
+    SE_EXIT_ARG      = 0x02,
+    SE_PREFIX_ARG    = 0x04,
+    SE_IM_ARG        = 0x08,  // activate composedStr
 };
 
 DEF_CLS(se_command_args);
@@ -40,7 +41,8 @@ struct se_command_args
      * when a keybinding comes from a key seq, member keyseq records all keys
      * current has been typed, and it certainly a prefix of a keybinding's seq.
      */
-    se_key_seq keyseq;  
+    se_key_seq keyseq;
+    GString *composedStr; // this is valid when use a IM to input
 };
 
 struct se_world;

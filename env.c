@@ -46,8 +46,20 @@ se_env* se_env_init()
 
     env->world = se_world_create();
 
-    if ( !se_env_change_font( env, "Inconsolata-13" ) ) {
+    char *mono_font_name = "Monaco-10:weight=normal:antilias=true";
+    /* char *mono_font_name = "Monaco:pixelsize=15:foundry=unknown:weight=normal" */
+    /*     ":width=normal:spacing=mono:scalable=true"; */
+    SE_UNUSED char *sans_font_name = "Droid Sans Fallback-11:width=normal"
+        ":scalable=true";
+
+    if ( !se_env_change_font( env, mono_font_name ) ) {
         env->xftFont = NULL;
+    }
+
+    env->xim = XOpenIM( env->display, NULL, NULL, NULL );
+    if ( env->xim == NULL ) {
+        se_error(" open im failed" );
+        exit(1);
     }
     
     return env;
@@ -56,6 +68,7 @@ se_env* se_env_init()
 void se_env_release(se_env* env)
 {
     if ( env ) {
+        XCloseIM( env->xim );
         XCloseDisplay( env->display );
         g_free( env );
     }

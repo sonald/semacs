@@ -67,6 +67,8 @@ struct se_text_viewer
 {
     se_env* env;
     Window view;
+    XIC xic; // one ic per window
+    
     int columns; // viewable width in cols
     int rows; // viewable height in rows
     

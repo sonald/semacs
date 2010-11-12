@@ -138,6 +138,7 @@ static int se_world_bufferCreate(se_world* world, const char* buf_name)
     se_buffer *bufp = se_buffer_create( world, buf_name );
     if ( !world->bufferList ) {
         world->bufferList = bufp;
+        bufp->nextBuffer = NULL;
     } else {
         bufp->nextBuffer = world->bufferList;
         world->bufferList = bufp;
@@ -159,6 +160,10 @@ static int se_world_bufferDelete(se_world* world, const char* buf_name)
         if ( strcmp(bufp->getBufferName(bufp), buf_name) == 0 ) {
             if ( bufp == world->current )
                 world->current = bufp->nextBuffer;
+
+            if ( bufp == world->bufferList )
+                world->bufferList = bufp->nextBuffer;
+            
             bufp->release( bufp );
             g_free( bufp );
             return TRUE;
@@ -237,6 +242,11 @@ static int se_world_dispatchCommand(se_world* world, se_command_args* args, se_k
     se_modemap *map = bufp->majorMode->modemap;
     g_assert( map );
 
+    if ( args->flags & SE_IM_ARG ) {
+        se_debug( "SE_IM_ARG set " );
+        return se_self_insert_command( world, args, key );
+    }
+    
     se_key_seq keyseq = se_key_seq_null_init();
     if ( args->flags & SE_PREFIX_ARG )
         keyseq = args->keyseq;
@@ -249,10 +259,6 @@ static int se_world_dispatchCommand(se_world* world, se_command_args* args, se_k
         return TRUE;
     }
 
-    if ( cmd == se_second_dispatch_command ) {
-        se_debug( "call second dispatch" );
-    }
-    
     return cmd( bufp->world, args, key);
 }
 

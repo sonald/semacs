@@ -52,7 +52,7 @@ int se_line_getLineLength( se_line* lp )
     return lp->content->used;
 }
 
-#define ROUND_TO_BLOCK(size)  ((((size)>>8)<<8) + (1<<9))
+#define ROUND_TO_BLOCK(size)  ((((size)>>8)<<8) + (1<<8))
 
 /**
  * insert data start from start, and if neccesary, realloc chunk and return new
@@ -64,7 +64,7 @@ static se_line* se_line_insert(se_line* lp, int start, const char* data, int len
     g_assert( lp && lp->content );
 
     se_chunk *chunk = lp->content;
-    se_debug("B: content(%d): [%s]", chunk->used, chunk->data );
+    /* se_debug("B: content(%d): [%s]", chunk->used, chunk->data ); */
     gboolean nl_ended = chunk->fullLine;
 
     start = MIN(start, chunk->used-(nl_ended?1:0) );
@@ -89,14 +89,13 @@ static se_line* se_line_insert(se_line* lp, int start, const char* data, int len
     if ( !nl_ended )
         chunk->fullLine = (nl_pos != NULL);
     
-    se_debug("A: content(%d): [%s]", chunk->used, chunk->data );
+    /* se_debug("A: content(%d): [%s]", chunk->used, chunk->data ); */
     return lp;
 }
 
 
 static se_line* se_line_clear(se_line* lp)
 {
-    se_debug( "clear line" );
     if ( lp->content->fullLine == TRUE ) {
         lp->content->data[0] = '\n';
         lp->content->used = 1;        
@@ -149,7 +148,7 @@ static se_line* se_line_alloc(const char* data, int len)
     }
     
     int new_len = ROUND_TO_BLOCK( len );
-    se_debug( "round size %d to %d", len, new_len );
+    /* se_debug( "round size %d to %d", len, new_len ); */
     lp->content = g_malloc0( sizeof(se_chunk)+new_len );
     if ( !lp->content ) {
         se_error( "no enough memory" );
@@ -160,8 +159,6 @@ static se_line* se_line_alloc(const char* data, int len)
     lp->content->size = new_len;
     lp->content->used = len;
     lp->content->fullLine = (data[len-1] == '\n');
-    if ( lp->content->fullLine )
-        se_debug( "nl ended line" );
     memcpy( lp->content->data, data, len );
     return lp;
 }
@@ -779,11 +776,13 @@ void se_buffer_insertChar(se_buffer* bufp, int c)
 void se_buffer_insertString(se_buffer* bufp, const char* str)
 {
     const char* sp = str;
-    int str_len = strlen( str );
+    int str_bytes = strlen( str );
+    int nr_chars = g_utf8_strlen( str, -1 );
+    se_debug( "str: %s, bytes: %d, chars: %d", str, str_bytes, nr_chars );
     
     do {
         const char* endp = strchr( sp, '\n' );
-        if ( !endp && (sp - str >= str_len) )
+        if ( !endp && (sp - str >= str_bytes) )
             break;
 
         int buf_len = 0;
@@ -791,19 +790,19 @@ void se_buffer_insertString(se_buffer* bufp, const char* str)
         if ( endp ) {
             buf_len = ++endp - sp; // take '\n' into account
             
-        } else if ( sp - str < str_len ) {
+        } else if ( sp - str < str_bytes ) {
             // means this is last line and no trailing '\n'
-            buf_len = sp - str;
-            endp = str + 1;
+            endp = str + str_bytes;
+            buf_len = endp - sp;
             nl_ended = FALSE;
         }
 
-        se_debug("process: sp - str: %d, sp(%d): [%s], nl_ended: %d",
-                 (sp - str), buf_len, strndup(sp, buf_len), nl_ended );
-        
+        se_debug("process: endp - sp: %d, sp(%d): [%s], nl_ended: %d",
+                 (endp - sp), buf_len, strndup(sp, buf_len), nl_ended );
+
         se_line *cur_lp = bufp->getCurrentLine( bufp );
         if ( !cur_lp ) {
-            se_debug("1st switch");
+            /* se_debug("1st switch"); */
             // eob and bol
             se_line *lp_new = se_line_alloc( sp, buf_len );
             if ( bufp->lines ) {
@@ -819,8 +818,7 @@ void se_buffer_insertString(se_buffer* bufp, const char* str)
             if ( !nl_ended ) bufp->lineCount++;
             
         } else if ( nl_ended ) {
-            se_debug("2nd switch");
-            
+            /* se_debug("2nd switch"); */
             if ( se_buffer_bol(bufp) ) {
                 se_line *lp_new = se_line_alloc( sp, buf_len );
                 se_buffer_insert_line_after( bufp, cur_lp->previous, lp_new );
@@ -848,7 +846,7 @@ void se_buffer_insertString(se_buffer* bufp, const char* str)
             }
 
         } else {
-            se_debug("3rd switch");
+            /* se_debug("3rd switch"); */
             int lp_len = se_line_getLineLength(cur_lp);
             se_line_insert( cur_lp, lp_len, sp, buf_len );
         }
@@ -858,7 +856,7 @@ void se_buffer_insertString(se_buffer* bufp, const char* str)
         se_buffer_update_point( bufp, buf_len );
 
         sp = endp;
-        if ( sp - str >= str_len )
+        if ( sp - str >= str_bytes )
             break;
         
     } while (1);

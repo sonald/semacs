@@ -78,6 +78,7 @@ static void se_draw_text_utf8( se_text_viewer* viewer, XftColor* color,
         .x = cur_pos.x,
         .y = cur_pos.y + env->glyphAscent,
     };
+    /* se_debug( "utf8: %s, utf8_len: %d", utf8, utf8_len ); */
     XftDrawStringUtf8( viewer->xftDraw, color, viewer->env->xftFont,
                        start_pos.x, start_pos.y,
                        (const XftChar8*)utf8, utf8_len );
@@ -154,7 +155,7 @@ static void se_text_viewer_redisplay(se_text_viewer* viewer )
         .red = 0x0,
         .green = 0x0,
         .blue = 0x0,
-        .alpha = 0xeeee
+        .alpha = 0xffff
     };
         
     XftColor clr;
@@ -281,22 +282,82 @@ static se_key se_delayed_wait_key(se_text_viewer* viewer)
     return se_key_event_process( viewer->env->display, ev.xkey );
 }
 
+// return TRUE if input is a composed str from IM, and returned from arg str
+static gboolean se_text_viewer_lookup_string(se_text_viewer* viewer, XKeyEvent* kev,
+                                             GString *str)
+{
+    char buf[64] = "";
+    int buf_len = sizeof buf - 1;
+    KeySym keysym;
+    Status status;
+    Xutf8LookupString( viewer->xic, kev, buf, buf_len, &keysym, &status );
+    gboolean composed_input = FALSE;
+    switch (status) {
+    case XBufferOverflow:
+        se_warn("XBufferOverflow");
+        break;
+        
+    case XLookupNone:
+        se_debug("XLookupNone");        
+        break;
+                
+    case XLookupKeySym:
+        if (status == XLookupKeySym) {
+            se_debug( "XLookupKeySym: sym: %s", XKeysymToString(keysym) );
+        }
+        break;
+        
+    case XLookupBoth:
+        se_debug( "XLookupBoth: sym: %s", XKeysymToString(keysym) );
+        se_debug( "XLookupBoth: buf: [%s]", buf );
+        if ((keysym == XK_Delete) || (keysym == XK_BackSpace)) {
+            se_debug("delete");
+            break;
+        }
+        break;
+                
+    case XLookupChars:
+        se_debug( "XLookupChars: buf: [%s]", buf );
+        g_string_printf( str, "%s", buf );
+        composed_input = TRUE;
+        break;
+    }
+
+    return composed_input;
+}
+
 void se_text_viewer_key_event(se_text_viewer* viewer, XEvent* ev )
 {
     assert( viewer && ev );
 
     XKeyEvent kev = ev->xkey;
     if ( kev.type == KeyPress ) {
-        se_key sekey = se_key_event_process( viewer->env->display, kev );
-        if ( se_key_is_null(sekey) )
-            return;
+        se_key sekey = se_key_null_init();
+        
+        GString *chars = g_string_new("");
+        gboolean composed_input = se_text_viewer_lookup_string(viewer, &kev, chars );
+        //FIXME: right now, do not handle Unicode before I finish basic facilities
+        composed_input = FALSE; 
+        if ( !composed_input ) {
+            sekey = se_key_event_process( viewer->env->display, kev );
+            if ( se_key_is_null(sekey) )
+                return;
     
-        if ( sekey.ascii == XK_Escape )
-            se_env_quit( viewer->env );
-    
+            if ( sekey.ascii == XK_Escape )
+                se_env_quit( viewer->env );
+        }
+        
         se_world *world = viewer->env->world;
         se_command_args args;
         bzero( &args, sizeof args );
+        args.composedStr = g_string_new("");
+
+        if ( composed_input ) {
+            args.flags |= SE_IM_ARG;
+            g_string_assign( args.composedStr, chars->str );
+            g_string_free( chars, TRUE );
+        }
+        
         while ( world->dispatchCommand( world, &args, sekey ) != TRUE ) {
             sekey = se_delayed_wait_key( viewer );
             if ( sekey.ascii == XK_Escape )
@@ -329,6 +390,83 @@ void se_text_viewer_draw_create( se_text_viewer* viewer )
         viewer->env->colormap );
 }
 
+
+/*
+ * This function chooses the "more desirable" of two input styles.  The
+ * style with the more complicated Preedit style is returned, and if the
+ * styles have the same Preedit styles, then the style with the more
+ * complicated Status style is returned.  There is no "official" way to
+ * order interaction styles; this one seems reasonable, though.
+ * This is a long procedure for a simple heuristic.
+ */
+static XIMStyle ChooseBetterStyle(XIMStyle style1, XIMStyle style2)
+{
+    XIMStyle s,t;
+    XIMStyle preedit = XIMPreeditArea | XIMPreeditCallbacks |
+        XIMPreeditPosition | XIMPreeditNothing | XIMPreeditNone;
+    XIMStyle status = XIMStatusArea | XIMStatusCallbacks |
+        XIMStatusNothing | XIMStatusNone;
+    if (style1 == 0) {
+        se_debug("use style2");
+        return style2;
+    }
+    
+    if (style2 == 0) {
+        se_debug("use style1");
+        return style1;
+    }
+    
+    if ((style1 & (preedit | status)) == (style2 & (preedit | status)))
+        return style1;
+    s = style1 & preedit;
+    t = style2 & preedit;
+    if (s != t) {
+        if (s | t | XIMPreeditCallbacks)
+            return (s == XIMPreeditCallbacks)?style1:style2;
+        else if (s | t | XIMPreeditPosition)
+            return (s == XIMPreeditPosition)?style1:style2;
+        else if (s | t | XIMPreeditArea)
+            return (s == XIMPreeditArea)?style1:style2;
+        else if (s | t | XIMPreeditNothing)
+            return (s == XIMPreeditNothing)?style1:style2;
+    }
+    else { /* if preedit flags are the same, compare status flags */
+        s = style1 & status;
+        t = style2 & status;
+        if (s | t | XIMStatusCallbacks)
+            return (s == XIMStatusCallbacks)?style1:style2;
+        else if (s | t | XIMStatusArea)
+            return (s == XIMStatusArea)?style1:style2;
+        else if (s | t | XIMStatusNothing)
+            return (s == XIMStatusNothing)?style1:style2;
+    }
+}
+
+static void dump_style( XIMStyle best_style )
+{
+    GString *style_str = g_string_new("");
+    if ( best_style & XIMPreeditCallbacks)
+        g_string_append_printf( style_str, ",%s", "XIMPreeditCallbacks");
+    if ( best_style & XIMPreeditPosition )
+        g_string_append_printf( style_str, ",%s", "XIMPreeditPosition");
+    if ( best_style & XIMPreeditArea     )
+        g_string_append_printf( style_str, ",%s", "XIMPreeditArea");
+    if ( best_style & XIMPreeditNothing  )
+        g_string_append_printf( style_str, ",%s", "XIMPreeditNothing");
+    if ( best_style & XIMPreeditNone     )
+        g_string_append_printf( style_str, ",%s", "XIMPreeditNone");
+    if ( best_style & XIMStatusCallbacks )
+        g_string_append_printf( style_str, ",%s", "XIMStatusCallbacks");
+    if ( best_style & XIMStatusArea      )
+        g_string_append_printf( style_str, ",%s", "XIMStatusArea");
+    if ( best_style & XIMStatusNothing   )
+        g_string_append_printf( style_str, ",%s", "XIMStatusNothing");
+    if ( best_style & XIMStatusNone      )
+        g_string_append_printf( style_str, ",%s", "XIMStatusNone");
+    se_debug("best_style: %s", style_str->str );
+    g_string_free( style_str, True );
+}
+
 se_text_viewer* se_text_viewer_create( se_env* env )
 {
     assert( env );
@@ -359,6 +497,40 @@ se_text_viewer* se_text_viewer_create( se_env* env )
     se_text_viewer_draw_create( viewer );
 
     viewer->content = g_malloc0( SE_MAX_COLUMNS * SE_MAX_ROWS );
+
+    XIMStyles *im_supported_styles;
+    XIMStyle app_supported_styles;
+    XIMStyle style;
+    XIMStyle best_style;
+
+    XGetIMValues( env->xim, XNQueryInputStyle, &im_supported_styles, NULL );
+    app_supported_styles = XIMPreeditNone | XIMPreeditNothing | XIMPreeditArea
+        | XIMStatusNone | XIMStatusNothing | XIMStatusArea;
+    best_style = 0;
+    se_debug( "styles count: %d", im_supported_styles->count_styles );
+    for(int i=0; i < im_supported_styles->count_styles; i++) {
+        style = im_supported_styles->supported_styles[i];
+        dump_style( style );
+        if ((style & app_supported_styles) == style) /* if we can handle it */
+            best_style = ChooseBetterStyle(style, best_style);
+    }
+
+    /* if we couldn't support any of them, print an error and exit */
+    if (best_style == 0) {
+        se_error("commonly supported interaction style.");
+        exit(1);
+    }
+    XFree(im_supported_styles);
+    dump_style( best_style );
+    
+    viewer->xic = XCreateIC(env->xim, XNInputStyle, best_style,
+                            XNClientWindow, viewer->view,
+                            NULL);
+    if ( viewer->xic == NULL ) {
+        se_debug(" create xic failed" );
+        exit(1);        
+    }
+    se_debug( "XLocaleOfIM: %s", XLocaleOfIM( env->xim ) );
     
     return viewer;
 }

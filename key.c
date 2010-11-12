@@ -48,7 +48,6 @@ char* se_key_to_string(se_key key)
     return g_string_free( gstr, FALSE );
 }
 
-
 se_key se_key_from_string2( const char* rep )
 {
     se_key key = se_key_null_init();
