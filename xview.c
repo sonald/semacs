@@ -351,7 +351,8 @@ void se_text_viewer_key_event(se_text_viewer* viewer, XEvent* ev )
         se_command_args args;
         bzero( &args, sizeof args );
         args.composedStr = g_string_new("");
-
+        args.universalArg = g_string_new("");
+        
         if ( composed_input ) {
             args.flags |= SE_IM_ARG;
             g_string_assign( args.composedStr, chars->str );
@@ -364,6 +365,9 @@ void se_text_viewer_key_event(se_text_viewer* viewer, XEvent* ev )
                 se_env_quit( viewer->env );
         }
 
+        g_string_free( args.composedStr, TRUE );
+        g_string_free( args.universalArg, TRUE );
+        
         if ( world->current->isModified(world->current) ) {
             viewer->repaint( viewer );
             viewer->redisplay( viewer );

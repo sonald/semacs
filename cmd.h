@@ -43,6 +43,7 @@ struct se_command_args
      */
     se_key_seq keyseq;
     GString *composedStr; // this is valid when use a IM to input
+    GString *universalArg; 
 };
 
 struct se_world;

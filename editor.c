@@ -62,7 +62,7 @@ static int se_world_init(se_world* world)
 
     //FIXME: create two buffers
     const char init_str[] = "# this is by default created buffer just for demo\n"
-        "you can test some Emacs keybindings here\n";
+        "you can test some Emacs keybindings here";
     if ( world->bufferCreate( world, "*scratch*" ) == TRUE ) {
         assert( world->bufferList && world->current );
         world->current->insertString( world->current, init_str );
@@ -241,13 +241,22 @@ static int se_world_dispatchCommand(se_world* world, se_command_args* args, se_k
     se_buffer *bufp = world->current;
     se_modemap *map = bufp->majorMode->modemap;
     g_assert( map );
-
+    se_key_seq keyseq = se_key_seq_null_init();
+    
     if ( args->flags & SE_IM_ARG ) {
         se_debug( "SE_IM_ARG set " );
         return se_self_insert_command( world, args, key );
     }
-    
-    se_key_seq keyseq = se_key_seq_null_init();
+
+    if ( args->flags & SE_UNIVERSAL_ARG ) {
+        se_debug( "SE_UNIVERSAL_ARG set");
+        if ( BETWEEN(key.ascii, '0', '9') ) {
+            g_string_append_printf(args->universalArg, "%c", key.ascii);
+            return FALSE;
+        }
+        // else loop cmd according to universalArg
+    }
+
     if ( args->flags & SE_PREFIX_ARG )
         keyseq = args->keyseq;
     keyseq.keys[keyseq.len++] = key;
@@ -259,7 +268,19 @@ static int se_world_dispatchCommand(se_world* world, se_command_args* args, se_k
         return TRUE;
     }
 
-    return cmd( bufp->world, args, key);
+    int nr_execution = 1;
+    if ( args->flags & SE_UNIVERSAL_ARG )
+        nr_execution = strtol( args->universalArg->str, NULL, 10 );
+    //TODO: if nr_execution == 0, it should mean something according to Emacs C-u
+    nr_execution = nr_execution?:4;
+    se_debug("execute cmd %d times", nr_execution );
+
+    gboolean ret = TRUE;    
+    for (int i = 0; i < nr_execution; ++i) {
+        if ( (ret = cmd( bufp->world, args, key)) == FALSE )
+            break;
+    }
+    return ret;
 }
 
 se_world* se_world_create()

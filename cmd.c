@@ -72,6 +72,8 @@ DEFINE_CMD(se_delete_forward_command)
 
 DEFINE_CMD(se_universal_arg_command)
 {
+    se_debug("universal args");
+    args->flags |= SE_UNIVERSAL_ARG;
     return FALSE;
 }
 

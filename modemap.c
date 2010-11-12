@@ -102,6 +102,7 @@ se_modemap* se_modemap_full_create(const char* map_name )
      * XK_Delete                        0xffff
      */    
     se_modemap_insert_keybinding_str( map, "C-x C-c", se_editor_quit_command );
+    se_modemap_insert_keybinding_str( map, "C-u", se_universal_arg_command );    
     se_modemap_insert_keybinding_str( map, "C-g", se_kbd_quit_command );
     se_modemap_insert_keybinding_str( map, "C-j", se_newline_and_indent_command );
     se_modemap_insert_keybinding_str( map, "C-i", se_indent_for_tab_command );
