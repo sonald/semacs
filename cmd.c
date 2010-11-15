@@ -33,29 +33,29 @@ DEFINE_CMD(se_self_silent_command)
 DEFINE_CMD(se_self_insert_command)
 {
     if ( args->flags & SE_IM_ARG ) {
-        world->current->insertString( world->current, args->composedStr->str );
+        return SAFE_CALL( world->current, insertString, args->composedStr->str );
     } else {
-        world->current->insertChar( world->current, key.ascii );
+        return SAFE_CALL( world->current, insertChar, key.ascii );
     }
-    return TRUE;
 }
 
 //TODO: indent
 DEFINE_CMD(se_newline_and_indent_command)
 {
-    world->current->insertChar( world->current, '\n' );
-    return TRUE;
+    return SAFE_CALL( world->current, insertChar, '\n' );
 }
 
 DEFINE_CMD(se_newline_command)
 {
-    world->current->insertChar( world->current, '\n' );
-    return TRUE;
+    return SAFE_CALL( world->current, insertChar, '\n' );
 }
 
 DEFINE_CMD(se_indent_for_tab_command)
 {
-    //g_assert( key.ascii == XK_Tab );    
+    for (int i = 0; i < 8; ++i) {
+        if ( !SAFE_CALL( world->current, insertChar, '\x20' ) )
+            return FALSE;
+    }
     return TRUE;
 }
 
@@ -67,7 +67,8 @@ DEFINE_CMD(se_backspace_command)
 
 DEFINE_CMD(se_delete_forward_command)
 {
-    return TRUE;
+    //TODO: check universalArg for count or backward delete
+    return SAFE_CALL( world->current, deleteChars, 1 );
 }
 
 DEFINE_CMD(se_universal_arg_command)
@@ -101,43 +102,37 @@ DEFINE_CMD(se_kbd_quit_command)
 DEFINE_CMD(se_forward_char_command)
 {
     se_debug("");
-    world->current->forwardChar( world->current, 1 );    
-    return TRUE;
+    return SAFE_CALL( world->current, forwardChar, 1 );    
 }
 
 DEFINE_CMD(se_backward_char_command)
 {
     se_debug("");
-    world->current->forwardChar( world->current, -1 );
-    return TRUE;
+    return SAFE_CALL( world->current, forwardChar, -1 );
 }
 
 DEFINE_CMD(se_backward_line_command)
 {
     se_debug("");
-    world->current->forwardLine( world->current, -1 );
-    return TRUE;
+    return SAFE_CALL( world->current, forwardLine, -1 );
 }
 
 DEFINE_CMD(se_forward_line_command)
 {
     se_debug("");
-    world->current->forwardLine( world->current, 1 );
-    return TRUE;
+    return SAFE_CALL( world->current, forwardLine, 1 );
 }
 
 DEFINE_CMD(se_move_beginning_of_line_command)
 {
     se_debug("");
-    world->current->beginingOfLine( world->current );
-    return TRUE;
+    return SAFE_CALL( world->current, beginingOfLine );
 }
 
 DEFINE_CMD(se_move_end_of_line_command)
 {
     se_debug("");
-    world->current->endOfLine( world->current );
-    return TRUE;
+    return SAFE_CALL( world->current, endOfLine );
 }
 
 DEFINE_CMD(se_previous_buffer_command)

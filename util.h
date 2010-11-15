@@ -80,6 +80,13 @@
             is_in;                              \
         })
 
+#define SAFE_CALL(cls, memfunc, ...)  ({                    \
+            g_assert( cls );                                \
+            g_assert( cls->memfunc );                       \
+            int _ret = cls->memfunc( cls, ##__VA_ARGS__ );  \
+            _ret;                                           \
+        })
+
 #define BETWEEN(mem, min, max)  ((mem >= (min)) && (mem <= (max)))
 #define BETWEEN_EX(mem, min, max)  ((mem > (min)) && (mem < (max)))
 

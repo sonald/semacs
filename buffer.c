@@ -64,15 +64,18 @@ static se_line* se_line_insert(se_line* lp, int start, const char* data, int len
     g_assert( lp && lp->content );
 
     se_chunk *chunk = lp->content;
-    /* se_debug("B: content(%d): [%s]", chunk->used, chunk->data ); */
+    /* se_debug("B: content(%d): [%s], data(%d): [%s]", chunk->used, chunk->data, */
+    /*          len, data ); */
     gboolean nl_ended = chunk->fullLine;
 
     start = MIN(start, chunk->used-(nl_ended?1:0) );
 
-    // sanity check
-    char* nl_pos = strchr(data, '\n');
+    // sanity check: this is not strong enough
+    char* nl_pos = strrchr(data, '\n');
+    if ( nl_pos >= data + len )
+        nl_pos = NULL;
     g_assert( nl_pos == NULL ||
-              ( !nl_ended && (nl_pos == data + len - 1) && start == chunk->used) );
+              ((nl_pos == data + len - 1) && (start == chunk->used)) );
     
     int new_len = chunk->size;
     if ( chunk->used + len > chunk->size ) {
@@ -93,15 +96,24 @@ static se_line* se_line_insert(se_line* lp, int start, const char* data, int len
     return lp;
 }
 
-
 static se_line* se_line_clear(se_line* lp)
 {
-    if ( lp->content->fullLine == TRUE ) {
-        lp->content->data[0] = '\n';
-        lp->content->used = 1;        
-    } else
-        lp->content->used = 0;
+    // lp should nl-ended, if not, it should be destroyed not cleared
+    g_assert( lp->content->fullLine );
+    lp->content->data[0] = '\n';
+    lp->content->used = 1;        
     return lp;
+}
+
+static void se_line_remove_nl( se_line* lp )
+{
+    se_chunk* chunk = lp->content;
+    if ( chunk->fullLine ) {
+        g_assert( chunk->data[chunk->used-1] == '\n' );
+        chunk->data[chunk->used-1] = 0;
+        chunk->used--;
+        chunk->fullLine = FALSE;
+    } 
 }
 
 /**
@@ -112,9 +124,9 @@ static se_line* se_line_delete(se_line* lp, int start, int len)
 {
     g_assert( lp );
     int used = lp->content->used;
-    if ( lp->content->fullLine == TRUE )
-        used--;
     
+    if ( lp->content->fullLine )
+        used--;    
     if ( len <= 0 || start < 0 || start >= used )
         return lp;
     
@@ -124,7 +136,8 @@ static se_line* se_line_delete(se_line* lp, int start, int len)
         return se_line_clear( lp );
 
     char *data = lp->content->data;
-    memmove( data+start+len, data+start, used - start - len );
+    used += (lp->content->fullLine?1:0);
+    memmove( data+start, data+start+len, used - start - len );
     lp->content->used -= len;
     return lp;
 }
@@ -256,27 +269,11 @@ static void se_buffer_insert_line_after( se_buffer* bufp, se_line *pos, se_line*
     lp->previous = pos;
 }
 
-/* SE_UNUSED static void se_buffer_delete_line( se_buffer* bufp, se_line* lp ) */
-/* { */
-/*     if ( lp->next == lp ) { // this is only line, we must keep at one line exists. */
-/*                                // clear content only */
-/*         g_assert( bufp->lineCount == 1 ); */
-/*         bufp->lines = NULL; */
-/*         bufp->charCount = 0; */
-/*         bufp->lineCount = 0; */
-
-/*         // special case: set point to zero directly */
-/*         bufp->position = 0; */
-/*         bufp->curLine = 0; */
-/*         bufp->curColumn = 0; */
-/*         se_line_destroy( lp ); */
-/*         return; */
-/*     } */
-
-/*     lp->next->previous = lp->previous;         */
-/*     lp->previous->next = lp->next; */
-/*     se_line_destroy( lp ); */
-/* } */
+static void se_buffer_delete_line( se_buffer* bufp, se_line* lp )
+{
+    lp->next->previous = lp->previous;
+    lp->previous->next = lp->next;
+}
 
 int se_buffer_init(se_buffer* bufp)
 {
@@ -712,16 +709,25 @@ int se_buffer_setMajorMode(se_buffer* bufp, const char* mode)
     return TRUE;
 }
 
-void se_buffer_insertChar(se_buffer* bufp, int c)
+int se_buffer_insertChar(se_buffer* bufp, int c)
 {
     /* se_debug( "B:No.%d, point: %d, col: %d, lines: %d", bufp->curLine, bufp->position, */
     /*           bufp->curColumn, bufp->lineCount ); */
     bufp->modified = TRUE;
+    char buf[2] = { c, 0 };
+    
+    if ( !bufp->lines ) {
+        bufp->lines = se_line_alloc( buf, 1 );
+        bufp->lines->next = bufp->lines;
+        bufp->lines->previous = bufp->lines;
+        bufp->lineCount++;
+        bufp->charCount++;    
+        se_buffer_update_point( bufp, 1 );
+        return TRUE;
+    }
     
     se_line *lp = bufp->getCurrentLine( bufp );
     int col = bufp->curColumn;
-
-    char buf[2] = { c, 0 };
     if ( lp == NULL ) {
         se_line *lp_new = se_line_alloc( buf, 1 );
         se_buffer_insert_line_after( bufp, bufp->lines->previous, lp_new );
@@ -730,7 +736,6 @@ void se_buffer_insertChar(se_buffer* bufp, int c)
     } else if ( c == '\n' ) { // split cur line into 2 lines
         gboolean nl_ended = lp->content->fullLine;
         
-//        if ( col == 0 ) {
         if ( se_buffer_bol(bufp) ) {        
             se_line *lp_new = se_line_alloc( buf, 1 );
             if ( bufp->curLine == 0 ) {
@@ -765,6 +770,7 @@ void se_buffer_insertChar(se_buffer* bufp, int c)
 
     /* se_debug( "A:No.%d, point: %d, col: %d, lines: %d", bufp->curLine, bufp->position, */
     /*           bufp->curColumn, bufp->lineCount ); */
+    return TRUE;
 }
 
 /**
@@ -773,7 +779,7 @@ void se_buffer_insertChar(se_buffer* bufp, int c)
  * TODO: 
  *   auto split long lines into small ( auto wrap or what )
  */
-void se_buffer_insertString(se_buffer* bufp, const char* str)
+int se_buffer_insertString(se_buffer* bufp, const char* str)
 {
     const char* sp = str;
     int str_bytes = strlen( str );
@@ -862,29 +868,119 @@ void se_buffer_insertString(se_buffer* bufp, const char* str)
     } while (1);
 
     bufp->modified = TRUE;
+    return TRUE;
 }
 
-void se_buffer_replaceChar(se_buffer* bufp, int c)
+static int se_buffer_replaceChar(se_buffer* bufp, int c)
 {
-
+    return TRUE;
 }
 
-void se_buffer_replaceString(se_buffer* bufp, const char* str)
+static int se_buffer_replaceString(se_buffer* bufp, const char* str)
 {
-
+    return TRUE;
 }
 
-int se_buffer_deleteChars(se_buffer* bufp, int count)
+static int se_buffer_deleteChar( se_buffer* bufp )
+{
+    if ( se_buffer_eob(bufp) )
+        return TRUE;
+
+    bufp->modified = TRUE;
+    se_line *cur_lp = bufp->getCurrentLine( bufp );
+    g_assert( cur_lp );
+
+    gboolean nl_ended = cur_lp->content->fullLine;
+    int ln_size = se_line_getLineLength( cur_lp );
+    int col = bufp->getCurrentColumn( bufp );
+    
+    if ( nl_ended ) {
+        ln_size--; // remove '\n'
+        g_assert( BETWEEN(col, 0, ln_size) );
+
+        if ( ln_size == 0 ) {
+            // delete empty line
+
+            if ( bufp->lineCount == 1 ) {
+                bufp->lines = NULL;
+            } else if ( cur_lp == bufp->lines ) {
+                bufp->lines = cur_lp->next;
+            }
+
+            se_buffer_delete_line( bufp, cur_lp );
+            se_line_destroy( cur_lp );
+            bufp->lineCount--;
+            bufp->charCount--;
+            return TRUE;
+        }
+        
+        if ( col == ln_size ) {
+            // merge with next line
+            se_debug( "merge with next line" );
+            if ( cur_lp->next == bufp->lines || bufp->lineCount == 1 ) {
+                se_line_remove_nl( cur_lp );
+                bufp->charCount--;
+                se_debug("tail line, remove '\n' only");
+                return TRUE;
+            }
+            
+            se_line *to_merge = cur_lp->next;
+            se_buffer_delete_line( bufp, to_merge );
+            int merge_size = se_line_getLineLength( to_merge );
+            /* if ( to_merge->content->fullLine ) */
+            /*     merge_size--; */
+            
+            se_line_remove_nl( cur_lp );
+            se_line_insert( cur_lp, ln_size, se_line_getData(to_merge), merge_size );
+            bufp->lineCount--;
+            bufp->charCount--;
+            return TRUE;
+        } 
+
+        // else
+        se_line_delete( cur_lp, col, 1 );
+        bufp->charCount--;
+        return TRUE;
+    }
+
+    // else !nl_ended, so this should be the last line
+    g_assert( bufp->curLine == bufp->lineCount - 1 );
+    if ( ln_size == 1 ) {
+        se_buffer_delete_line( bufp, cur_lp );
+        if ( bufp->lineCount == 1 ) {
+            g_assert( bufp->lines == cur_lp );
+            bufp->lines = NULL;
+            se_debug("empty buffer");
+        }            
+        se_line_destroy( cur_lp );
+        bufp->lineCount--;
+    } else
+        se_line_delete( cur_lp, col, 1 );
+    
+    bufp->charCount--;
+    
+    return TRUE;
+}
+
+static int se_buffer_deleteChars(se_buffer* bufp, int count)
+{
+    g_assert( bufp );
+    if ( count <= 0 )
+        return TRUE;
+
+    for (int i = 0; i < count; ++i) {
+        if ( !se_buffer_deleteChar( bufp ) )
+            return FALSE;
+    }
+    return TRUE;
+}
+
+static int se_buffer_deleteRegion(se_buffer* bufp, const char* markName)
 {
     return 0;
 }
 
-int se_buffer_deleteRegion(se_buffer* bufp, const char* markName)
-{
-    return 0;
-}
-
-int se_buffer_copyRegion(se_buffer* bufp, se_buffer* other, const char* markName)
+static int se_buffer_copyRegion(se_buffer* bufp, se_buffer* other, const char* markName)
 {
     return 0;
 }

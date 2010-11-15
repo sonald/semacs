@@ -128,10 +128,10 @@ struct se_buffer
     int (*invokeMode)(se_buffer*, const char* mode);
     int (*setMajorMode)(se_buffer*, const char* mode);
     
-    void (*insertChar)(se_buffer*, int c);
-    void (*replaceChar)(se_buffer*, int c);
-    void (*insertString)(se_buffer*, const char*);
-    void (*replaceString)(se_buffer*, const char*);
+    int (*insertChar)(se_buffer*, int c);
+    int (*replaceChar)(se_buffer*, int c);
+    int (*insertString)(se_buffer*, const char*);
+    int (*replaceString)(se_buffer*, const char*);
     int (*deleteChars)(se_buffer*, int count);
     // delete region between point and mark
     int (*deleteRegion)(se_buffer*, const char* markName);

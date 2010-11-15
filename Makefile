@@ -1,4 +1,4 @@
-CC=gcc
+CC=clang
 LDFLAGS=`pkg-config x11 glib-2.0 xft --libs`
 CFLAGS=`pkg-config x11 glib-2.0 xft --cflags` -g -Wall -std=gnu99
 
@@ -14,7 +14,6 @@ HFILES= util.h \
 
 OFILES= \
 	obj/xview.o \
-	obj/util.o \
 	obj/env.o \
 	obj/editor.o \
 	obj/buffer.o \
@@ -45,7 +44,7 @@ obj/%.o: %.c $(HFILES)
 
 clean:
 	rm -rf obj
-	rm *.o
 	-rm semacs
+	-rm test_semacs
 
 

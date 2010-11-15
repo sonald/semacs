@@ -92,12 +92,8 @@ se_modemap* se_modemap_full_create(const char* map_name )
     /*
      * XK_BackSpace                     0xff08
      * XK_Tab                           0xff09
-     * XK_Linefeed                      0xff0a
-     * XK_Clear                         0xff0b
      * XK_Return                        0xff0d
-     * XK_Pause                         0xff13
      * XK_Scroll_Lock                   0xff14
-     * XK_Sys_Req                       0xff15
      * XK_Escape                        0xff1b
      * XK_Delete                        0xffff
      */    
@@ -112,6 +108,8 @@ se_modemap* se_modemap_full_create(const char* map_name )
                                       se_newline_command );
     se_modemap_insert_keybinding_str( map, "BackSpace",
                                       se_backspace_command );
+    se_modemap_insert_keybinding_str( map, "C-d",
+                                      se_delete_forward_command );
     
     se_modemap_insert_keybinding_str( map, "C-f", se_forward_char_command );
     se_modemap_insert_keybinding_str( map, "C-b", se_backward_char_command );

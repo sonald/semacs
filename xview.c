@@ -444,6 +444,8 @@ static XIMStyle ChooseBetterStyle(XIMStyle style1, XIMStyle style2)
         else if (s | t | XIMStatusNothing)
             return (s == XIMStatusNothing)?style1:style2;
     }
+
+    return 0;
 }
 
 static void dump_style( XIMStyle best_style )
