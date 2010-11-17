@@ -23,11 +23,15 @@
 #include "util.h"
 #include "key.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+    
 enum {
     SE_UNIVERSAL_ARG = 0x01,
     SE_EXIT_ARG      = 0x02,
     SE_PREFIX_ARG    = 0x04,
-    SE_IM_ARG        = 0x08,  // activate composedStr
+    SE_IM_ARG        = 0x8,  // activate composedStr
 };
 
 DEF_CLS(se_command_args);
@@ -46,6 +50,12 @@ struct se_command_args
     GString *universalArg; 
 };
 
+extern se_command_args* se_command_args_create();
+extern void se_command_args_destroy(se_command_args*);
+extern se_command_args se_command_args_init();
+extern void se_command_args_clear(se_command_args*);
+extern gboolean se_command_args_is_null(se_command_args*);
+    
 struct se_world;
 // return TRUE means exiting command dispatch loop
 typedef int (*se_key_command_t)(struct se_world* world, se_command_args* args, se_key key);
@@ -78,5 +88,10 @@ extern DECLARE_CMD(se_previous_buffer_command);
 extern DECLARE_CMD(se_next_buffer_command);
 
 #undef DECLARE_CMD
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
 

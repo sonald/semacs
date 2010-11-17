@@ -74,6 +74,7 @@ extern "C" {
 #endif
 
 void setup_language();
+const char* XEventTypeString(int type);
     
 #ifdef __cplusplus
 }

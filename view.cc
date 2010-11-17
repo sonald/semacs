@@ -35,4 +35,113 @@ void setup_language()
 
 
 
+const char* XEventTypeString(int type) 
+{
+#define prologue(msg) return msg
+    
+    switch (type) {
+    case KeyPress:
+        prologue ("KeyPress");
+        break;
+    case KeyRelease:
+        prologue ("KeyRelease");
+        break;
+    case ButtonPress:
+        prologue ("ButtonPress");
+        break;
+    case ButtonRelease:
+        prologue ("ButtonRelease");
+        break;
+    case MotionNotify:
+        prologue ("MotionNotify");
+        break;
+    case EnterNotify:
+        prologue ("EnterNotify");
+        break;
+    case LeaveNotify:
+        prologue ("LeaveNotify");
+        break;
+    case FocusIn:
+        prologue ("FocusIn");
+        break;
+    case FocusOut:
+        prologue ("FocusOut");
+        break;
+    case KeymapNotify:
+        prologue ("KeymapNotify");
+        break;
+    case Expose:
+        prologue ("Expose");
+        break;
+    case GraphicsExpose:
+        prologue ("GraphicsExpose");
+        break;
+    case NoExpose:
+        prologue ("NoExpose");
+        break;
+    case VisibilityNotify:
+        prologue ("VisibilityNotify");
+        break;
+    case CreateNotify:
+        prologue ("CreateNotify");
+        break;
+    case DestroyNotify:
+        prologue ("DestroyNotify");
+        break;
+    case UnmapNotify:
+        prologue ("UnmapNotify");
+        break;
+    case MapNotify:
+        prologue ("MapNotify");
+        break;
+    case MapRequest:
+        prologue ("MapRequest");
+        break;
+    case ReparentNotify:
+        prologue ("ReparentNotify");
+        break;
+    case ConfigureNotify:
+        prologue ("ConfigureNotify");
+        break;
+    case ConfigureRequest:
+        prologue ("ConfigureRequest");
+        break;
+    case GravityNotify:
+        prologue ("GravityNotify");
+        break;
+    case ResizeRequest:
+        prologue ("ResizeRequest");
+        break;
+    case CirculateNotify:
+        prologue ("CirculateNotify");
+        break;
+    case CirculateRequest:
+        prologue ("CirculateRequest");
+        break;
+    case PropertyNotify:
+        prologue ("PropertyNotify");
+        break;
+    case SelectionClear:
+        prologue ("SelectionClear");
+        break;
+    case SelectionRequest:
+        prologue ("SelectionRequest");
+        break;
+    case SelectionNotify:
+        prologue ("SelectionNotify");
+        break;
+    case ColormapNotify:
+        prologue ("ColormapNotify");
+        break;
+    case ClientMessage:
+        prologue ("ClientMessage");
+        break;
+    case MappingNotify:
+        prologue ("MappingNotify");
+    }
+
+    return "UNKNOWN";
+#undef prologue
+}
+
 

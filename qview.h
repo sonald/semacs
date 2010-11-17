@@ -54,6 +54,8 @@ private:
     se_cursor _cursor; // where cursor is, pos in logical (row, col),
                       // this is not point of editor
     XEvent _cachedEvent;
+    se_command_args _cmdArgs;
+    
     se_world *_world;
 
     enum {
@@ -67,8 +69,9 @@ private:
     se_key se_delayed_wait_key();
     void updateViewContent(); // update data in view area
     void updateSize();
-    void drawTextUtf8( QColor, se_cursor, const char*, int utf8_len );
-    void drawBufferPoint();
+    void drawTextUtf8( QPainter *, se_cursor, const char*, int utf8_len );
+    void drawBufferPoint( QPainter *p );
+    void dispatchCommand( se_key sekey );
     
 };
 

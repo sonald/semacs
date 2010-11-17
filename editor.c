@@ -272,7 +272,7 @@ static int se_world_dispatchCommand(se_world* world, se_command_args* args, se_k
     }
 
     int nr_execution = 1;
-    if ( args->flags & SE_UNIVERSAL_ARG )
+    if ( args->flags & SE_UNIVERSAL_ARG && cmd != se_kbd_quit_command )
         nr_execution = strtol( args->universalArg->str, NULL, 10 );
     //TODO: if nr_execution == 0, it should mean something according to Emacs C-u
     nr_execution = nr_execution?:4;

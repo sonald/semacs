@@ -26,25 +26,42 @@
 SEView::SEView()
 {
     _world = se_world_create();
+    
     setFont( QFont( "Monaco", 11 ) ) ;
     QFontMetrics fm = fontMetrics();
     _glyphMaxWidth = fm.width("W");
     _glyphMaxHeight = fm.height();
     _glyphAscent = fm.ascent();
-    
     qDebug() << "get font: " << font().toString();
-    updateSize();
-    _content = (gchar*)g_malloc0( SE_MAX_COLUMNS * SE_MAX_ROWS );
 
-    _composingState = SE_IM_COMMIT;
+    _content = (gchar*)g_malloc0( SE_MAX_COLUMNS * SE_MAX_ROWS );
+    _cmdArgs = se_command_args_init();
+    
+    _composingState = SE_IM_NORMAL;
     setAttribute( Qt::WA_InputMethodEnabled );
-    update();
 }
 
 bool SEView::x11Event( XEvent *event )
 {
     _cachedEvent = *event;
-    return QWidget::x11Event( event );
+    bool flip = false;
+    int orig_state = _composingState;
+    
+    if ( event->type == KeyPress ) {
+        orig_state = _composingState;
+        qDebug() << "XEvent: " << XEventTypeString(event->type);        
+    }
+    
+    bool ret = QWidget::x11Event( event );
+
+    if ( event->type == KeyPress ) {
+        if ( orig_state != _composingState && _composingState == SE_IM_COMMIT ) {
+            flip = true;
+            se_debug("flip");
+        }
+    }
+    
+    return ret;
 }
 
 void SEView::inputMethodEvent( QInputMethodEvent *event ) 
@@ -54,9 +71,11 @@ void SEView::inputMethodEvent( QInputMethodEvent *event )
              << ", replace len: " << event->replacementLength()
              << ", replace start: " << event->replacementStart();
     if ( event->preeditString().isEmpty() ) {
-        if ( event->commitString().isEmpty() )
+        if ( event->commitString().isEmpty() ) {
+            if ( _composingState == SE_IM_COMMIT )
+                dispatchCommand( se_key_null_init() );
             _composingState = SE_IM_NORMAL;
-        else
+        } else
             _composingState = SE_IM_COMMIT;
     } else {
         g_assert ( event->commitString().isEmpty() );
@@ -66,7 +85,14 @@ void SEView::inputMethodEvent( QInputMethodEvent *event )
     switch( _composingState ) {
     case SE_IM_NORMAL: break;
     case SE_IM_COMPOSING: break;
-    case SE_IM_COMMIT: _composedText = event->commitString(); break;
+    case SE_IM_COMMIT:
+        if ( !event->commitString().isEmpty() ) {
+            _cmdArgs.flags |= SE_IM_ARG;
+            g_string_assign( _cmdArgs.composedStr,
+                             event->commitString().toUtf8().constData() );
+            qDebug() << "commit im";
+        }
+        break;        
     }
 }
 
@@ -139,48 +165,44 @@ se_key SEView::se_delayed_wait_key()
     return se_key_event_process( QX11Info::display(), ev.xkey );
 }
 
+void SEView::dispatchCommand( se_key sekey )
+{
+    if ( _world->dispatchCommand( _world, &_cmdArgs, sekey ) ) {
+        qDebug() << "cmd finished";
+        se_command_args_clear( &_cmdArgs );
+        _composingState = SE_IM_NORMAL;
+        
+        if ( _world->current->isModified(_world->current) ) {
+            se_debug("pending update");
+            _world->current->modified = FALSE;
+            updateViewContent();
+            return;
+        }
+    }
+
+    updateViewContent();
+    // not complete key seq, continue ...
+
+}
+
 void SEView::keyPressEvent( QKeyEvent * event )
 {
-    se_debug("");
-    
+    qDebug() << ("KeyPress: ") << event->text();
     g_assert( _cachedEvent.type == KeyPress );
     
     XKeyEvent kev = _cachedEvent.xkey;
     se_key sekey = se_key_null_init();
         
     sekey = se_key_event_process( QX11Info::display(), kev );
-    if ( se_key_is_null(sekey) )
+    //qDebug() << se_key_to_string( sekey );
+    if ( se_key_is_null(sekey) ) {
         return;
+    }
     
     if ( sekey.ascii == XK_Escape )
         qApp->quit();
 
-    se_command_args args;
-    bzero( &args, sizeof args );
-    args.composedStr = g_string_new("");
-    args.universalArg = g_string_new("");
-        
-    // if ( composed_input ) {
-    //     args.flags |= SE_IM_ARG;
-    //     g_string_assign( args.composedStr, chars->str );
-    //     g_string_free( chars, TRUE );
-    // }
-        
-    while ( _world->dispatchCommand( _world, &args, sekey ) != TRUE ) {
-        sekey = se_delayed_wait_key();
-        if ( sekey.ascii == XK_Escape )
-            qApp->quit();
-    }
-
-    g_string_free( args.composedStr, TRUE );
-    g_string_free( args.universalArg, TRUE );
-        
-    if ( _world->current->isModified(_world->current) ) {
-        updateViewContent();
-        update();
-        
-    }
-
+    dispatchCommand( sekey );
 }
 
 void SEView::keyReleaseEvent( QKeyEvent * event )
@@ -207,6 +229,8 @@ void SEView::updateViewContent()
         /* se_debug( "draw No.%d: [%s]", r, buf ); */
         lp = lp->next;
     }
+
+    update();
 }
 
 void SEView::resizeEvent( QResizeEvent * event )
@@ -224,37 +248,31 @@ void SEView::updateSize()
 
     se_debug( "new size in pixels (%d, %d), in chars (%d, %d)",
               _physicalWidth, _physicalHeight, _columns, _rows );
+    updateViewContent();
 }
 
-// void SEView::drawBufferPoint()
-// {
-//     se_buffer *cur_buf = _world->current;
-//     g_assert( cur_buf );
+void SEView::drawBufferPoint( QPainter *p )
+{
+    se_buffer *cur_buf = _world->current;
+    g_assert( cur_buf );
 
-//     se_cursor point_cur = {
-//         .row = cur_buf->getLine( cur_buf ),
-//         .column = cur_buf->getCurrentColumn( cur_buf )
-//     };
-//     se_position point_pos = se_text_cursor_to_physical( viewer, point_cur );
-//     point_pos.y -= (env->glyphMaxHeight - env->glyphAscent)/2;
+    se_cursor point_cur = {
+        cur_buf->getCurrentColumn( cur_buf ),
+        cur_buf->getLine( cur_buf ),
+    };
     
-//     XRenderColor renderClr = {
-//         .red = 0x00,
-//         .green = 0xffff,
-//         .blue = 0x00,
-//         .alpha = 0x00
-//     };
+    se_position point_pos = (se_position){ point_cur.column * _glyphMaxWidth,
+                                           point_cur.row * _glyphMaxHeight };
+    point_pos.y -= (_glyphMaxHeight - _glyphAscent)/2;
+
+    QColor clr( 0xff, 0x00, 0x00, 128 );
         
-//     XftColor clr;
-//     XftColorAllocValue( env->display, env->visual, env->colormap, &renderClr, &clr );
-    
-//     XftDrawRect( viewer->xftDraw, &clr, point_pos.x, point_pos.y, 2, env->glyphMaxHeight );
+    p->setPen( clr );
+    p->fillRect( point_pos.x, point_pos.y, 2, _glyphMaxHeight, clr );
 
-//     XftColorFree( env->display, env->visual, env->colormap, &clr );
-// }
+}
 
-void SEView::drawTextUtf8( QColor color,
-                        se_cursor cur, const char* utf8, int utf8_len )
+void SEView::drawTextUtf8( QPainter *p, se_cursor cur, const char* utf8, int utf8_len )
 {
     se_position cur_pos = (se_position){ cur.column * _glyphMaxWidth,
                                          cur.row * _glyphMaxHeight };
@@ -263,9 +281,9 @@ void SEView::drawTextUtf8( QColor color,
         cur_pos.y + _glyphAscent,
     };
 
-    QPainter p( this );
-    p.setPen( color );
-    p.drawText( start_pos.x, start_pos.y, QString::fromUtf8(utf8) );
+    QColor clr( 0, 0, 0, 0xff );    
+    p->setPen( clr );
+    p->drawText( start_pos.x, start_pos.y, QString::fromUtf8(utf8) );
 }
 
 void SEView::paintEvent( QPaintEvent * event )
@@ -275,24 +293,24 @@ void SEView::paintEvent( QPaintEvent * event )
     se_buffer *cur_buf = _world->current;
     g_assert( cur_buf );
 
-    QColor clr( 0x00, 0xffff, 0x00, 128 );
+    QPainter p;
+    p.begin( this );
     
     int nr_lines = cur_buf->getLineCount( cur_buf );
     se_debug( "repaint buf %s [%d, %d]", cur_buf->getBufferName(cur_buf),
               _columns, MIN(_rows, nr_lines) );    
 
-    // // this clear the whole window ( slow )
-    // XClearArea( env->display, viewer->view, 0, 0, 0, 0, False );
-    
     _cursor = (se_cursor){ 0, 0 };
     for (int r = 0; r < MIN(_rows, nr_lines); ++r) {
         char *data = _content + r*SE_MAX_ROWS;
         int data_len = strlen( data );
-        drawTextUtf8( clr, _cursor, data, MIN(data_len, _columns) );
+        drawTextUtf8( &p, _cursor, data, MIN(data_len, _columns) );
         _cursor = (se_cursor){0, _cursor.row + 1};
     }
 
-    // se_draw_buffer_point( viewer );
+    drawBufferPoint( &p );
+    p.end();
+    
 }
 
 int start_qview()

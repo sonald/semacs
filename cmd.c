@@ -21,6 +21,45 @@
 #include "cmd.h"
 #include "editor.h"
 
+se_command_args* se_command_args_create()
+{
+    se_command_args *args = g_malloc0( sizeof(se_command_args) );
+    args->composedStr = g_string_new("");
+    args->universalArg = g_string_new("");
+    return args;
+}
+
+void se_command_args_destroy(se_command_args* args)
+{
+    g_assert( args );
+    g_string_free( args->composedStr, TRUE );
+    g_string_free( args->universalArg, TRUE );
+    g_free( args );
+}
+
+se_command_args se_command_args_init()
+{
+    se_command_args args;
+    bzero( &args, sizeof args );
+    args.composedStr = g_string_new("");
+    args.universalArg = g_string_new("");
+    return args;
+}
+
+void se_command_args_clear(se_command_args* args)
+{
+    g_string_truncate( args->composedStr, 0 );
+    g_string_truncate( args->universalArg, 0 );
+    args->flags = 0;
+    args->keyseq = se_key_seq_null_init();
+    args->prefix_arg = 0;
+}
+
+gboolean se_command_args_is_null(se_command_args* args)
+{
+    return (args->flags == 0) && (args->prefix_arg == 0);
+}
+
 #define DEFINE_CMD(cmd_name) int cmd_name(se_world* world, se_command_args* args, se_key key)
 
 DEFINE_CMD(se_self_silent_command)
@@ -95,6 +134,7 @@ DEFINE_CMD(se_editor_quit_command)
 DEFINE_CMD(se_kbd_quit_command)
 {
     se_debug("");
+    se_command_args_clear( args );
     return TRUE;
 }
 
