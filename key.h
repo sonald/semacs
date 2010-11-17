@@ -27,6 +27,10 @@
 
 #include "util.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
     ControlDown = 0x01,
     ShiftDown   = 0x02,
@@ -82,6 +86,7 @@ struct se_key_seq
     se_key keys[SE_MAX_KEY_SEQ_LEN];
 };
 
+
 /**
  * string rep of key seq define as below:
  * if isprint(key): as it is
@@ -102,6 +107,10 @@ extern se_key_seq se_key_seq_from_keysyms( int nr_keysym, ... );
 extern char* se_key_seq_to_string( se_key_seq );
 extern int se_key_seq_is_equal( se_key_seq, se_key_seq );
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

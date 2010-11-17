@@ -1,6 +1,6 @@
 
 /**
- * Environment - 
+ * BaseView - 
  * Copyright (C) 2010 Sian Cao <sycao@redflag-linux.com>
  *  
  * This library is free software; you can redistribute it and/or
@@ -18,56 +18,67 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef _semacs_env_h
-#define _semacs_env_h
+#ifndef _semacs_view_h
+#define _semacs_view_h
 
 #include "util.h"
 #include "editor.h"
 
-DEF_CLS(se_font);
-struct se_font
+
+DEF_CLS(se_cursor);
+struct se_cursor
 {
-    XftFont *xftFont;
-    int glyphMaxHeight;
-    int glyphMaxWidth;
-    int glyphAscent;
+    int column;
+    int row;
 };
 
-DEF_CLS(se_env);  // environment 
-struct se_env 
+DEF_CLS(se_position);
+struct se_position
 {
-    Display *display;
-    int numScreens;
-    int screen;  // which screen the editor is showed
-    Colormap colormap;
-    Visual *visual;
-    Window root;
-    
-    XftFont *xftFont;
-    int glyphMaxHeight;
-    int glyphMaxWidth;
-    int glyphAscent;
+    int x;
+    int y;
+};
 
-    XIM xim;
+DEF_CLS(se_size);
+struct se_size
+{
+    int width;
+    int height;
+};
+
+DEF_CLS(se_rect);
+struct se_rect
+{
+    se_cursor start;
+    se_size size;
+};
+
+// this limits make decision a lot easier now, limit policy gonna change later
+#define SE_MAX_COLUMNS 512   // longest line allowed
+#define SE_MAX_ROWS    128   // most visible lines of text
+
+enum {
+    SE_XVIEW,
+    SE_QVIEW
+};
+
+DEF_CLS(se_text_viewer); // viewer of text editor
+struct se_text_viewer
+{
     se_world *world;
-    
-    gboolean exitLoop;
-
+    int viewType; // determine type of private member
 };
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern se_env* se_env_init();
-extern void se_env_release(se_env* env);
-extern void se_env_quit(se_env* env);
-extern gboolean se_env_change_font( se_env* env, const char* name );
-
+void setup_language();
     
 #ifdef __cplusplus
 }
 #endif
 
 #endif
+
 

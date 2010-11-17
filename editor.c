@@ -61,7 +61,9 @@ static int se_world_init(se_world* world)
     g_assert( fundamentalMode );
 
     //FIXME: create two buffers
-    const char init_str[] = "";
+    const char init_str[] = "# 测试缓冲区，在这里试试emacs键绑定\n"
+        "#try basic Emacs keybindings";
+
     /* const char init_str[] = "# this is by default created buffer just for demo\n" */
     /*     "you can test some Emacs keybindings here"; */
     if ( world->bufferCreate( world, "*scratch*" ) == TRUE ) {

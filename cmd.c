@@ -20,7 +20,6 @@
 
 #include "cmd.h"
 #include "editor.h"
-#include "env.h"
 
 #define DEFINE_CMD(cmd_name) int cmd_name(se_world* world, se_command_args* args, se_key key)
 

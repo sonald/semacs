@@ -1,6 +1,11 @@
-CC=clang
-LDFLAGS=`pkg-config x11 glib-2.0 xft --libs`
-CFLAGS=`pkg-config x11 glib-2.0 xft --cflags` -g -Wall -std=gnu99
+CC=gcc
+CXX=g++
+LDFLAGS=`pkg-config x11 glib-2.0 xft QtGui --libs`
+CFLAGS=`pkg-config x11 glib-2.0 xft QtGui --cflags` -g -Wall -std=gnu99
+#CFLAGS=`pkg-config x11 glib-2.0 xft QtGui --cflags` -g -Wall -std=c++98
+CXXFLAGS=`pkg-config x11 glib-2.0 xft QtGui --cflags` -g -Wall -std=c++98
+
+MOC=moc
 
 HFILES= util.h \
 	editor.h \
@@ -10,6 +15,8 @@ HFILES= util.h \
 	key.h \
 	cmd.h \
 	xview.h \
+	qview.h \
+	view.h \
 	submatch.h
 
 OFILES= \
@@ -21,7 +28,10 @@ OFILES= \
 	obj/key.o \
 	obj/cmd.o \
 	obj/multimatch.o \
-	obj/singlematch.o
+	obj/view.o \
+	obj/qview.o \
+	obj/singlematch.o \
+	obj/qview.moc.o
 
 
 TESTOFILES= \
@@ -31,16 +41,24 @@ TESTOFILES= \
 all: semacs test_semacs
 
 test_semacs: $(TESTOFILES) $(OFILES)
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CXX) -o $@ $^ $(LDFLAGS)
 
 semacs: $(OFILES) obj/main.o
-	$(CC) -o $@ $^ $(LDFLAGS) 
+	$(CXX) -o $@ $^ $(LDFLAGS) 
 
 
 obj/%.o: %.c $(HFILES)
 	@mkdir -p $$(dirname $@)
 	$(CC) -c -o $@ $(CFLAGS) $*.c
 
+obj/%.o: %.cc $(HFILES)
+	@mkdir -p $$(dirname $@)
+	$(CXX) -c -o $@ $(CXXFLAGS) $*.cc
+
+qview.o: qview.moc.cc
+
+qview.moc.cc: qview.h
+	$(MOC) $^ -o $@
 
 clean:
 	rm -rf obj

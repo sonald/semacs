@@ -25,6 +25,11 @@
 #include "key.h"
 #include "cmd.h"
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 DEF_CLS(se_modemap_data);
 DEF_CLS(se_modemap);
 struct se_modemap
@@ -84,6 +89,10 @@ extern void se_mode_delete(const char* mode_name);
 // globally defined mode as default
 extern se_mode *fundamentalMode;
 extern se_modemap *fundamentalModeMap;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

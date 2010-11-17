@@ -31,6 +31,10 @@
 
 #include <glib.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * KMP Algo struct
  */
@@ -104,5 +108,10 @@ struct trie_match_result
 
 extern int trie_match_ex(trie_t* trie, const char* str,
                          int nmatch, trie_match_result results[]);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -24,6 +24,10 @@
 #include "util.h"
 #include "modemap.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 DEF_CLS(se_mark);
 
 DEF_CLS(se_chunk);
@@ -139,6 +143,10 @@ struct se_buffer
 };
 
 extern se_buffer* se_buffer_create(struct se_world*, const char* buf_name);
+    
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

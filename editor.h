@@ -57,8 +57,17 @@ struct se_world
     int (*dispatchCommand)(se_world*, se_command_args*, se_key);
 };
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern se_world* se_world_create();
 extern void se_world_free(se_world*);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

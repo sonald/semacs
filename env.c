@@ -46,7 +46,7 @@ se_env* se_env_init()
 
     env->world = se_world_create();
 
-    char *mono_font_name = "Monaco-10:weight=normal:antilias=true";
+    SE_UNUSED char *mono_font_name = "Monaco-10:weight=normal:antilias=true";
     /* char *mono_font_name = "Monaco:pixelsize=15:foundry=unknown:weight=normal" */
     /*     ":width=normal:spacing=mono:scalable=true"; */
     SE_UNUSED char *sans_font_name = "Droid Sans Fallback-11:width=normal"

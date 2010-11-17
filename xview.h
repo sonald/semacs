@@ -21,49 +21,17 @@
 #ifndef _semacs_xview_h
 #define _semacs_xview_h
 
-#include "util.h"
 #include "env.h"
-
-DEF_CLS(se_cursor);
-struct se_cursor
-{
-    int column;
-    int row;
-};
-
-DEF_CLS(se_position);
-struct se_position
-{
-    int x;
-    int y;
-};
+#include "view.h"
 
 se_position se_cursor_to_pixels_pos(se_env* env, se_cursor cur);
 
-DEF_CLS(se_size);
-struct se_size
-{
-    int width;
-    int height;
-};
+DEF_CLS(se_text_xviewer);
 
-DEF_CLS(se_rect);
-struct se_rect
-{
-    se_cursor start;
-    se_size size;
-};
+typedef void (*event_handler_t)( se_text_xviewer* viewer, XEvent* ev);
+#define SE_VIEW_HANDLER(_name) void _name(se_text_xviewer* viewer, XEvent* ev );
 
-// this limits make decision a lot easier now, limit policy gonna change later
-#define SE_MAX_COLUMNS 512   // longest line allowed
-#define SE_MAX_ROWS    128   // most visible lines of text
-
-DEF_CLS(se_text_viewer); // viewer of text editor
-
-typedef void (*event_handler_t)( se_text_viewer* viewer, XEvent* ev);
-#define SE_VIEW_HANDLER(_name) void _name(se_text_viewer* viewer, XEvent* ev );
-
-struct se_text_viewer
+struct se_text_xviewer
 {
     se_env* env;
     Window view;
@@ -80,17 +48,26 @@ struct se_text_viewer
     se_cursor cursor; // where cursor is, pos in logical (row, col),
                       // this is not point of editor
 
-    void (*show)( se_text_viewer* viewer );
-    void (*repaint)( se_text_viewer* viewer );
-    void (*redisplay)( se_text_viewer* viewer );    
-    void (*updateSize)( se_text_viewer* viewer, int width, int height );
+    void (*show)( se_text_xviewer* viewer );
+    void (*repaint)( se_text_xviewer* viewer );
+    void (*redisplay)( se_text_xviewer* viewer );    
+    void (*updateSize)( se_text_xviewer* viewer, int width, int height );
 
     event_handler_t key_handler;
     event_handler_t mouse_handler;
     event_handler_t configure_change_handler;
 };
 
-extern se_text_viewer* se_text_viewer_create( se_env* );
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+se_text_xviewer* se_text_xviewer_create( se_env*);
+int main_loop(int argc, char *argv[]);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

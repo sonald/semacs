@@ -19,18 +19,130 @@
 
 #include "xview.h"
 #include "key.h"
+#include "editor.h"
+#include <locale.h>
 
-SE_VIEW_HANDLER( se_text_viewer_key_event );
-SE_VIEW_HANDLER( se_text_viewer_mouse_event );
-SE_VIEW_HANDLER( se_text_viewer_configure_change_handler );
+SE_VIEW_HANDLER( se_text_xviewer_key_event );
+SE_VIEW_HANDLER( se_text_xviewer_mouse_event );
+SE_VIEW_HANDLER( se_text_xviewer_configure_change_handler );
 
-static se_position se_text_cursor_to_physical( se_text_viewer* viewer, se_cursor cur )
+
+static const char* XEventTypeString(int type) 
+{
+#define prologue(msg) return msg
+    
+    switch (type) {
+    case KeyPress:
+        prologue ("KeyPress");
+        break;
+    case KeyRelease:
+        prologue ("KeyRelease");
+        break;
+    case ButtonPress:
+        prologue ("ButtonPress");
+        break;
+    case ButtonRelease:
+        prologue ("ButtonRelease");
+        break;
+    case MotionNotify:
+        prologue ("MotionNotify");
+        break;
+    case EnterNotify:
+        prologue ("EnterNotify");
+        break;
+    case LeaveNotify:
+        prologue ("LeaveNotify");
+        break;
+    case FocusIn:
+        prologue ("FocusIn");
+        break;
+    case FocusOut:
+        prologue ("FocusOut");
+        break;
+    case KeymapNotify:
+        prologue ("KeymapNotify");
+        break;
+    case Expose:
+        prologue ("Expose");
+        break;
+    case GraphicsExpose:
+        prologue ("GraphicsExpose");
+        break;
+    case NoExpose:
+        prologue ("NoExpose");
+        break;
+    case VisibilityNotify:
+        prologue ("VisibilityNotify");
+        break;
+    case CreateNotify:
+        prologue ("CreateNotify");
+        break;
+    case DestroyNotify:
+        prologue ("DestroyNotify");
+        break;
+    case UnmapNotify:
+        prologue ("UnmapNotify");
+        break;
+    case MapNotify:
+        prologue ("MapNotify");
+        break;
+    case MapRequest:
+        prologue ("MapRequest");
+        break;
+    case ReparentNotify:
+        prologue ("ReparentNotify");
+        break;
+    case ConfigureNotify:
+        prologue ("ConfigureNotify");
+        break;
+    case ConfigureRequest:
+        prologue ("ConfigureRequest");
+        break;
+    case GravityNotify:
+        prologue ("GravityNotify");
+        break;
+    case ResizeRequest:
+        prologue ("ResizeRequest");
+        break;
+    case CirculateNotify:
+        prologue ("CirculateNotify");
+        break;
+    case CirculateRequest:
+        prologue ("CirculateRequest");
+        break;
+    case PropertyNotify:
+        prologue ("PropertyNotify");
+        break;
+    case SelectionClear:
+        prologue ("SelectionClear");
+        break;
+    case SelectionRequest:
+        prologue ("SelectionRequest");
+        break;
+    case SelectionNotify:
+        prologue ("SelectionNotify");
+        break;
+    case ColormapNotify:
+        prologue ("ColormapNotify");
+        break;
+    case ClientMessage:
+        prologue ("ClientMessage");
+        break;
+    case MappingNotify:
+        prologue ("MappingNotify");
+    }
+
+    return "UNKNOWN";
+#undef prologue
+}
+
+static se_position se_text_cursor_to_physical( se_text_xviewer* viewer, se_cursor cur )
 {
     return (se_position){ cur.column * viewer->env->glyphMaxWidth,
             cur.row * viewer->env->glyphMaxHeight };
 }
 
-static void se_text_viewer_updateSize( se_text_viewer* viewer, int width, int height )
+static void se_text_xviewer_updateSize( se_text_xviewer* viewer, int width, int height )
 {
     assert( viewer );
     assert( width && height );
@@ -47,13 +159,13 @@ static void se_text_viewer_updateSize( se_text_viewer* viewer, int width, int he
     //TODO: check if cursor if out of display
 }
 
-static void se_text_viewer_show( se_text_viewer* viewer )
+static void se_text_xviewer_show( se_text_xviewer* viewer )
 {
     XMapWindow( viewer->env->display, viewer->view );
     XFlush( viewer->env->display );
 }
 
-SE_UNUSED void se_draw_char_utf8( se_text_viewer* viewer, XftColor* color,
+SE_UNUSED void se_draw_char_utf8( se_text_xviewer* viewer, XftColor* color,
                                   se_cursor cur, int c )
 {
     assert( viewer && viewer->xftDraw );
@@ -61,22 +173,22 @@ SE_UNUSED void se_draw_char_utf8( se_text_viewer* viewer, XftColor* color,
     const se_env* env = viewer->env;
     se_position cur_pos = se_text_cursor_to_physical(viewer, cur);
     se_position start_pos = {
-        .x = cur_pos.x,
-        .y = cur_pos.y + env->glyphAscent,
+        cur_pos.x,
+        cur_pos.y + env->glyphAscent,
     };
     XftDrawStringUtf8( viewer->xftDraw, color, viewer->env->xftFont,
                        start_pos.x, start_pos.y, (const XftChar8*)&c, 1 );
 }
 
-static void se_draw_text_utf8( se_text_viewer* viewer, XftColor* color,
+static void se_draw_text_utf8( se_text_xviewer* viewer, XftColor* color,
                         se_cursor cur, const char* utf8, int utf8_len )
 {
     assert( viewer && viewer->xftDraw );
     const se_env* env = viewer->env;
     se_position cur_pos = se_text_cursor_to_physical(viewer, cur);
     se_position start_pos = {
-        .x = cur_pos.x,
-        .y = cur_pos.y + env->glyphAscent,
+        cur_pos.x,
+        cur_pos.y + env->glyphAscent,
     };
     /* se_debug( "utf8: %s, utf8_len: %d", utf8, utf8_len ); */
     XftDrawStringUtf8( viewer->xftDraw, color, viewer->env->xftFont,
@@ -84,7 +196,7 @@ static void se_draw_text_utf8( se_text_viewer* viewer, XftColor* color,
                        (const XftChar8*)utf8, utf8_len );
 }
 
-static void se_draw_buffer_point( se_text_viewer* viewer )
+static void se_draw_buffer_point( se_text_xviewer* viewer )
 {
     se_env *env = viewer->env;
     se_world *world = viewer->env->world;
@@ -117,7 +229,7 @@ static void se_draw_buffer_point( se_text_viewer* viewer )
 }
 
 // send draw event and do real update in redisplay routine
-static void se_text_viewer_repaint( se_text_viewer* viewer )
+static void se_text_xviewer_repaint( se_text_xviewer* viewer )
 {
     XWindowAttributes attrs;
     XGetWindowAttributes( viewer->env->display, viewer->view, &attrs);
@@ -146,7 +258,7 @@ static void se_text_viewer_repaint( se_text_viewer* viewer )
     }
 }
 
-static void se_text_viewer_redisplay(se_text_viewer* viewer )
+static void se_text_xviewer_redisplay(se_text_xviewer* viewer )
 {
     se_debug( "redisplay" );
     
@@ -185,7 +297,7 @@ static void se_text_viewer_redisplay(se_text_viewer* viewer )
     XftColorFree( env->display, env->visual, env->colormap, &clr );
 }
 
-void se_text_viewer_configure_change_handler(se_text_viewer* viewer, XEvent* ev )
+void se_text_xviewer_configure_change_handler(se_text_xviewer* viewer, XEvent* ev )
 {
     se_debug( "enter configure_change_handler" );
     gboolean need_update = FALSE;
@@ -268,7 +380,7 @@ static se_key se_key_event_process( Display *display, XKeyEvent kev )
     return sekey;
 }
 
-static se_key se_delayed_wait_key(se_text_viewer* viewer)
+static se_key se_delayed_wait_key(se_text_xviewer* viewer)
 {
     se_debug( "waiting for a key..." );    
     XEvent ev;
@@ -283,7 +395,7 @@ static se_key se_delayed_wait_key(se_text_viewer* viewer)
 }
 
 // return TRUE if input is a composed str from IM, and returned from arg str
-static gboolean se_text_viewer_lookup_string(se_text_viewer* viewer, XKeyEvent* kev,
+static gboolean se_text_xviewer_lookup_string(se_text_xviewer* viewer, XKeyEvent* kev,
                                              GString *str)
 {
     char buf[64] = "";
@@ -326,7 +438,7 @@ static gboolean se_text_viewer_lookup_string(se_text_viewer* viewer, XKeyEvent* 
     return composed_input;
 }
 
-void se_text_viewer_key_event(se_text_viewer* viewer, XEvent* ev )
+void se_text_xviewer_key_event(se_text_xviewer* viewer, XEvent* ev )
 {
     assert( viewer && ev );
 
@@ -335,7 +447,7 @@ void se_text_viewer_key_event(se_text_viewer* viewer, XEvent* ev )
         se_key sekey = se_key_null_init();
         
         GString *chars = g_string_new("");
-        gboolean composed_input = se_text_viewer_lookup_string(viewer, &kev, chars );
+        gboolean composed_input = se_text_xviewer_lookup_string(viewer, &kev, chars );
         //FIXME: right now, do not handle Unicode before I finish basic facilities
         composed_input = FALSE; 
         if ( !composed_input ) {
@@ -375,12 +487,12 @@ void se_text_viewer_key_event(se_text_viewer* viewer, XEvent* ev )
     }    
 }
 
-void se_text_viewer_mouse_event(se_text_viewer* viewer, XEvent* ev )
+void se_text_xviewer_mouse_event(se_text_xviewer* viewer, XEvent* ev )
 {
     se_debug( "enter mouse event" );
 }
 
-void se_text_viewer_draw_create( se_text_viewer* viewer )
+void se_text_xviewer_draw_create( se_text_xviewer* viewer )
 {
     assert ( viewer->env->xftFont );
 
@@ -473,16 +585,15 @@ static void dump_style( XIMStyle best_style )
     g_string_free( style_str, True );
 }
 
-se_text_viewer* se_text_viewer_create( se_env* env )
+se_text_xviewer* se_text_xviewer_create( se_env* env )
 {
-    assert( env );
-
-    se_text_viewer* viewer = g_malloc0( sizeof(se_text_viewer) );
+    se_text_xviewer* viewer = g_malloc0( sizeof(se_text_xviewer) );
     if ( !viewer ) {
         se_error( "can not malloc a viewer obj" );
     }
+
+    viewer->env = env;
     
-    viewer->env = env;    
     int width = 800;
     int height = 600;
     
@@ -491,16 +602,16 @@ se_text_viewer* se_text_viewer_create( se_env* env )
         BlackPixel(env->display, env->screen),
         WhitePixel(env->display, env->screen) );
     
-    viewer->key_handler = se_text_viewer_key_event;
-    viewer->mouse_handler = se_text_viewer_mouse_event;
-    viewer->configure_change_handler = se_text_viewer_configure_change_handler;
+    viewer->key_handler = se_text_xviewer_key_event;
+    viewer->mouse_handler = se_text_xviewer_mouse_event;
+    viewer->configure_change_handler = se_text_xviewer_configure_change_handler;
 
-    viewer->show = se_text_viewer_show;
-    viewer->repaint = se_text_viewer_repaint;
-    viewer->redisplay = se_text_viewer_redisplay;
-    viewer->updateSize = se_text_viewer_updateSize;
+    viewer->show = se_text_xviewer_show;
+    viewer->repaint = se_text_xviewer_repaint;
+    viewer->redisplay = se_text_xviewer_redisplay;
+    viewer->updateSize = se_text_xviewer_updateSize;
     
-    se_text_viewer_draw_create( viewer );
+    se_text_xviewer_draw_create( viewer );
 
     viewer->content = g_malloc0( SE_MAX_COLUMNS * SE_MAX_ROWS );
 
@@ -540,3 +651,78 @@ se_text_viewer* se_text_viewer_create( se_env* env )
     
     return viewer;
 }
+
+int main_loop(int argc, char *argv[])
+{
+    setup_language();
+    se_env* env = se_env_init();
+    se_text_xviewer* viewer = se_text_xviewer_create( env );
+    
+    long im_event_mask;
+    XGetICValues( viewer->xic, XNFilterEvents, &im_event_mask, NULL );
+
+    int mask = ExposureMask | ButtonPressMask | ButtonReleaseMask
+        | KeyPressMask | KeyReleaseMask | SubstructureNotifyMask
+        | FocusChangeMask
+        | im_event_mask;
+    XSelectInput( env->display, viewer->view, mask );
+    XSetICFocus( viewer->xic );
+    
+    viewer->repaint( viewer );    
+    viewer->show( viewer );
+    
+    while ( 1 ) { // sync the first expose event
+        XEvent ev;
+        XNextEvent( env->display, &ev );
+        if ( ev.xany.window == viewer->view && ev.type == Expose ) {
+            viewer->redisplay( viewer );
+            break;
+        }
+    }
+
+    while( !env->exitLoop ) {
+        XEvent ev;
+        XNextEvent( env->display, &ev );
+        if ( XFilterEvent( &ev, None ) == True ) {
+            se_debug("IM filtered event: %s", XEventTypeString(ev.type) );
+            continue;
+        }
+        
+        if ( ev.xany.window != viewer->view ) {
+            se_msg( "skip event does not forward to view" );
+            continue;
+        }
+        
+        switch( ev.type ) {
+        case Expose:
+            se_debug( "Expose" );
+            if ( ev.xexpose.count > 0 )
+                break;
+
+            viewer->redisplay( viewer );
+            break;
+
+        case KeyPress:
+        case KeyRelease:
+            viewer->key_handler( viewer, &ev );
+            break;
+
+        case ConfigureNotify:
+        case MapNotify:
+            se_debug( "confiugration changed" );
+            viewer->configure_change_handler( viewer, &ev );
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    se_debug( "exit loop" );
+
+    XUnsetICFocus( viewer->xic );
+    XDestroyIC( viewer->xic );
+    se_env_release( env );
+    return 0;
+}
+
