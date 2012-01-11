@@ -18,6 +18,7 @@
  */
 
 
+
 #include "qview.h"
 #include "editor.h"
 
@@ -29,6 +30,7 @@ SEView::SEView()
     
     setFont( QFont( "Monaco", 11 ) ) ;
     QFontMetrics fm = fontMetrics();
+    
     _glyphMaxWidth = fm.width("W");
     _glyphMaxHeight = fm.height();
     _glyphAscent = fm.ascent();

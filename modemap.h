@@ -90,6 +90,12 @@ extern void se_mode_delete(const char* mode_name);
 extern se_mode *fundamentalMode;
 extern se_modemap *fundamentalModeMap;
 
+DEF_CLS(se_mode_manager);
+struct se_mode_manager
+{
+    
+};
+    
 #ifdef __cplusplus
 }
 #endif

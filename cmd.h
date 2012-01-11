@@ -77,7 +77,8 @@ extern DECLARE_CMD(se_editor_quit_command);
 extern DECLARE_CMD(se_kbd_quit_command);
 
 // point moving
-extern DECLARE_CMD(se_forward_char_command);
+//extern DECLARE_CMD(se_forward_char_command);
+
 extern DECLARE_CMD(se_backward_char_command);
 extern DECLARE_CMD(se_forward_line_command);
 extern DECLARE_CMD(se_backward_line_command);
@@ -87,7 +88,10 @@ extern DECLARE_CMD(se_move_beginning_of_line_command);
 extern DECLARE_CMD(se_previous_buffer_command);
 extern DECLARE_CMD(se_next_buffer_command);
 
-#undef DECLARE_CMD
+#define DEFINE_CMD(cmd_name) int cmd_name(se_world* world, se_command_args* args, se_key key)
+
+typedef int (*CMD_TYPE)(struct se_world*, se_command_args*, se_key);
+extern CMD_TYPE se_forward_char_command SE_ATTR_RELOC SE_DYNAMIC;
 
 #ifdef __cplusplus
 }

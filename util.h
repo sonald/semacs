@@ -39,10 +39,21 @@
 #define G_LOG_DOMAIN "semacs"
 #endif
 
+#ifdef __cplusplus
+
+#define se_error(fmt, ...) g_error( "[%s]: "#fmt, __FILE__, ##__VA_ARGS__ )
+#define se_msg(fmt, ...)   g_message( "[%s]: "#fmt, __FILE__, ##__VA_ARGS__ )
+#define se_warn(fmt, ...)  g_warning( "[%s]: "#fmt, __FILE__, ##__VA_ARGS__ )
+#define se_debug(fmt, ...) g_debug( "[%s]: "#fmt, __FILE__, ##__VA_ARGS__ )
+
+#else
+
 #define se_error(fmt, ...) g_error( "[%s]: "#fmt, __func__, ##__VA_ARGS__ )
 #define se_msg(fmt, ...)   g_message( fmt, ##__VA_ARGS__ )
 #define se_warn(fmt, ...)  g_warning( "[%s]: "#fmt, __func__, ##__VA_ARGS__ )
 #define se_debug(fmt, ...) g_debug( "[%s]: "#fmt, __func__, ##__VA_ARGS__ )
+
+#endif
 
 #ifndef MIN
 #define MIN(a, b) ({                            \
@@ -90,5 +101,7 @@
 #define BETWEEN(mem, min, max)  ((mem >= (min)) && (mem <= (max)))
 #define BETWEEN_EX(mem, min, max)  ((mem > (min)) && (mem < (max)))
 
+#define SE_DYNAMIC __attribute__((weak))
+#define SE_ATTR_RELOC  __attribute__(( __section__(".editorcmds") ))
 #endif // ~end of file
 

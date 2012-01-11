@@ -60,8 +60,6 @@ gboolean se_command_args_is_null(se_command_args* args)
     return (args->flags == 0) && (args->prefix_arg == 0);
 }
 
-#define DEFINE_CMD(cmd_name) int cmd_name(se_world* world, se_command_args* args, se_key key)
-
 DEFINE_CMD(se_self_silent_command)
 {
     se_debug( "unprintable char, ignore" );
@@ -138,11 +136,16 @@ DEFINE_CMD(se_kbd_quit_command)
     return TRUE;
 }
 
-DEFINE_CMD(se_forward_char_command)
-{
-    se_debug("");
-    return SAFE_CALL( world->current, forwardChar, 1 );    
-}
+/* DEFINE_CMD(se_forward_char_command) */
+/* { */
+/*     se_debug(""); */
+/*     if ( se_forward_char_hook_command ) { */
+/*         return se_forward_char_hook_command( world, args, key ); */
+/*     } */
+/*     return SAFE_CALL( world->current, forwardChar, 1 ); */
+/* } */
+
+CMD_TYPE se_forward_char_command = NULL;
 
 DEFINE_CMD(se_backward_char_command)
 {
@@ -186,4 +189,3 @@ DEFINE_CMD(se_next_buffer_command)
     return world->bufferSetNext( world ) != NULL;
 }
 
-#undef DEFINE_CMD

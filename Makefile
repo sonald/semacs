@@ -1,9 +1,8 @@
 CC=gcc
 CXX=g++
-LDFLAGS=`pkg-config x11 glib-2.0 xft QtGui --libs`
-CFLAGS=`pkg-config x11 glib-2.0 xft QtGui --cflags` -g -Wall -std=gnu99
-#CFLAGS=`pkg-config x11 glib-2.0 xft QtGui --cflags` -g -Wall -std=c++98
-CXXFLAGS=`pkg-config x11 glib-2.0 xft QtGui --cflags` -g -Wall -std=c++98
+LDFLAGS=`pkg-config x11 glib-2.0 xft QtGui --libs` -L.
+CFLAGS=`pkg-config x11 glib-2.0 xft QtGui --cflags` -g -Wall -std=gnu99 -fPIC
+CXXFLAGS=`pkg-config x11 glib-2.0 xft QtGui --cflags` -g -Wall -std=c++98 -fPIC
 
 MOC=moc
 
@@ -38,14 +37,19 @@ TESTOFILES= \
 	obj/testsuites.o
 
 
-all: semacs test_semacs
+all: semacs test_semacs libccmode.so libxmlmode.so
+
+libccmode.so: ccmode.c $(HFILES)
+	$(CC) $(CFLAGS) -shared -Bsymbolic -fPIC -o $@ $< $(LDFALGS) 
+
+libxmlmode.so: xmlmode.c $(HFILES)
+	$(CC) $(CFLAGS) -shared -Bsymbolic -fPIC -o $@ $< $(LDFALGS) 
 
 test_semacs: $(TESTOFILES) $(OFILES)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 semacs: $(OFILES) obj/main.o
-	$(CXX) -o $@ $^ $(LDFLAGS) 
-
+	$(CXX) -o $@ $^ $(LDFLAGS)
 
 obj/%.o: %.c $(HFILES)
 	@mkdir -p $$(dirname $@)
@@ -64,5 +68,6 @@ clean:
 	rm -rf obj
 	-rm semacs
 	-rm test_semacs
+	-rm lib*.so
 
 

@@ -21,11 +21,12 @@
 #include "util.h"
 #include "xview.h"
 
-
 #include <unistd.h>
 #include <getopt.h>
 #include <iostream>
 #include <libgen.h>
+
+#include <dlfcn.h>
 
 static char *progname = NULL;
 
@@ -37,6 +38,26 @@ void usage()
               << "  -xview, -X \t use raw x based views\n"
               << "  -im \t\t specify im to use\n";
     exit(1);
+}
+
+bool loadMode()
+{
+    dlerror();
+    void *hnd = dlopen( "./libccmode.so", RTLD_NOW | RTLD_GLOBAL );
+    if ( !hnd ) {
+        se_debug( "load mode failed" );
+        return false;
+    }
+    se_forward_char_command = (CMD_TYPE)dlsym( hnd, "se_forward_char_hook_command" );
+    char* err_msg = dlerror();
+    if ( err_msg ) {
+        se_debug( err_msg );
+        dlclose( hnd );
+        return false;
+    }
+    
+    //dlclose( hnd );    
+    return true;
 }
 
 int parse_args(int argc, char *argv[])
@@ -95,10 +116,13 @@ int parse_args(int argc, char *argv[])
     if ( optind < argc ) {
 
     }
+
+    loadMode();
+    
     if  ( flag_qview ) {
         QApplication app(argc, argv);
         app.setQuitOnLastWindowClosed( true );
-
+        
         SEView view;
         view.setFocus();
         view.show();
